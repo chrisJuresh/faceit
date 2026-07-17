@@ -1,3 +1,5 @@
+abandoned as faceit doesnt share swing% on api
+
 # Stackline
 
 Stackline is a server-rendered SvelteKit dashboard for understanding the people who regularly queue with `Christian976` on FACEIT. It turns the supported FACEIT Data API into a polished, shareable view of teammate impact, recent chemistry, form, maps, and match history without exposing the API key to visitors.
