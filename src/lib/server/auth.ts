@@ -5,7 +5,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 const COOKIE_NAME = 'stackline_owner';
 const SESSION_VALUE = 'owner';
 
-function safeEqual(left: string, right: string) {
+export function safeEqual(left: string, right: string) {
   const leftBuffer = Buffer.from(left);
   const rightBuffer = Buffer.from(right);
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);

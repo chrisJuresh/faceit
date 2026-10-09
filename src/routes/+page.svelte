@@ -16,6 +16,7 @@
     LogOut,
     Moon,
     Pencil,
+    Radio,
     RefreshCw,
     Search,
     Share2,
@@ -167,6 +168,10 @@
     </a>
 
     <nav class="header-actions" aria-label="Dashboard actions">
+      <a class="text-button" href="/live">
+        <Radio size={16} />
+        <span>Live</span>
+      </a>
       <button class="icon-button" type="button" onclick={toggleTheme} aria-label="Toggle theme">
         {#if theme === 'dark'}<Sun size={17} />{:else}<Moon size={17} />{/if}
       </button>
@@ -629,58 +634,6 @@
 </dialog>
 
 <style>
-  :global(:root) {
-    --accent: #ff5c35;
-    --accent-soft: rgba(255, 92, 53, 0.12);
-    --accent-border: rgba(255, 92, 53, 0.32);
-    --background: #0b0b0c;
-    --background-soft: #101011;
-    --surface: #141415;
-    --surface-raised: #1a1a1c;
-    --surface-quiet: #101012;
-    --border: #272729;
-    --border-strong: #353537;
-    --border-subtle: #202022;
-    --text: #d8d5cf;
-    --text-strong: #f5f2ec;
-    --text-muted: #87847e;
-    --positive: #7bd9a5;
-    --positive-soft: rgba(123, 217, 165, 0.12);
-    --negative: #ff7d76;
-    --negative-soft: rgba(255, 125, 118, 0.12);
-    --shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
-    color-scheme: dark;
-    font-family: Inter, "Segoe UI", ui-sans-serif, system-ui, -apple-system, sans-serif;
-    font-synthesis: none;
-  }
-
-  :global(:root[data-theme='light']) {
-    --background: #f2f0ea;
-    --background-soft: #ebe9e3;
-    --surface: #faf9f5;
-    --surface-raised: #ffffff;
-    --surface-quiet: #f0eee8;
-    --border: #d9d6cf;
-    --border-strong: #c7c3ba;
-    --border-subtle: #e3e0d9;
-    --text: #4f4c47;
-    --text-strong: #171715;
-    --text-muted: #77736c;
-    --positive: #16774b;
-    --positive-soft: rgba(22, 119, 75, 0.1);
-    --negative: #c13f38;
-    --negative-soft: rgba(193, 63, 56, 0.1);
-    --shadow: 0 24px 70px rgba(34, 31, 25, 0.13);
-    color-scheme: light;
-  }
-
-  :global(*) { box-sizing: border-box; }
-  :global(html) { background: var(--background); scroll-behavior: smooth; }
-  :global(body) { background: var(--background); color: var(--text); margin: 0; min-width: 320px; }
-  :global(button), :global(input), :global(select) { font: inherit; }
-  :global(button), :global(a) { -webkit-tap-highlight-color: transparent; }
-  :global(button:focus-visible), :global(a:focus-visible), :global(input:focus-visible), :global(select:focus-visible) { outline: 2px solid var(--accent); outline-offset: 3px; }
-
   .page-shell {
     background:
       radial-gradient(circle at 18% 7%, rgba(255, 92, 53, 0.07), transparent 22rem),

@@ -41,7 +41,7 @@ type PlayerAccumulator = {
   records: PlayerRecord[];
 };
 
-function normalizeFaceitUrl(value: string | undefined, fallback: string) {
+export function normalizeFaceitUrl(value: string | undefined, fallback: string) {
   return (value || fallback).replace('{lang}', 'en');
 }
 
@@ -51,7 +51,7 @@ function findHistoryTeam(match: FaceitHistoryMatch, playerId: string) {
   );
 }
 
-function displayMap(value: string) {
+export function displayMap(value: string) {
   const map = value.replace(/^de_/, '').replaceAll('_', ' ');
   return map ? map.charAt(0).toUpperCase() + map.slice(1) : 'Unknown';
 }

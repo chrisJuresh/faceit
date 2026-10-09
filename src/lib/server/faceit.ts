@@ -71,6 +71,79 @@ export interface FaceitMatchStats {
   rounds: FaceitStatsRound[];
 }
 
+export interface FaceitMatchRosterPlayer {
+  player_id: string;
+  nickname: string;
+  avatar?: string;
+  membership?: string;
+  game_player_id?: string;
+  game_player_name?: string;
+  game_skill_level?: number;
+  anticheat_required?: boolean;
+}
+
+export interface FaceitMatchFaction {
+  faction_id: string;
+  leader?: string;
+  avatar?: string;
+  name: string;
+  type?: string;
+  substituted?: boolean;
+  roster: FaceitMatchRosterPlayer[];
+  stats?: {
+    winProbability?: number;
+    skillLevel?: { average?: number; range?: { min?: number; max?: number } };
+    rating?: number;
+  };
+}
+
+export interface FaceitVotingEntity {
+  name?: string;
+  class_name?: string;
+  game_map_id?: string;
+  guid?: string;
+  image_lg?: string;
+  image_sm?: string;
+}
+
+export interface FaceitMatch {
+  match_id: string;
+  game?: string;
+  region?: string;
+  status: string;
+  competition_id?: string;
+  competition_type?: string;
+  competition_name?: string;
+  best_of?: number;
+  calculate_elo?: boolean;
+  configured_at?: number;
+  started_at?: number;
+  finished_at?: number;
+  faceit_url?: string;
+  demo_url?: string[];
+  teams: Record<string, FaceitMatchFaction>;
+  voting?: Record<string, { entities?: FaceitVotingEntity[]; pick?: string[] } | string[] | undefined>;
+  results?: { winner?: string; score?: Record<string, number> };
+  detailed_results?: Array<{
+    asc_score?: boolean;
+    winner?: string;
+    factions?: Record<string, { score?: number }>;
+  }>;
+}
+
+export interface FaceitLifetimeStats {
+  player_id: string;
+  lifetime: Record<string, string | number | string[] | null>;
+  segments?: Array<{
+    label: string;
+    mode?: string;
+    type?: string;
+    img_small?: string;
+    img_regular?: string;
+    stats: Record<string, string | number | null>;
+  }>;
+}
+
 export class FaceitApiError extends Error {
   constructor(
     message: string,
@@ -133,6 +206,26 @@ export function getPlayerHistory(playerId: string, limit: number) {
     request<{ items: FaceitHistoryMatch[]; start: number; end: number }>(
       `/players/${encodeURIComponent(playerId)}/history?game=cs2&offset=0&limit=${boundedLimit}`
     )
+  );
+}
+
+export function getRecentHistory(playerId: string, limit: number) {
+  return cached(`recent-history:${playerId}:${limit}`, 20_000, () =>
+    request<{ items: FaceitHistoryMatch[] }>(
+      `/players/${encodeURIComponent(playerId)}/history?game=cs2&offset=0&limit=${limit}`
+    )
+  );
+}
+
+export function getMatch(matchId: string) {
+  return cached(`match:${matchId}`, 10_000, () =>
+    request<FaceitMatch>(`/matches/${encodeURIComponent(matchId)}`)
+  );
+}
+
+export function getLifetimeStats(playerId: string) {
+  return cached(`lifetime:${playerId}`, 10 * 60_000, () =>
+    request<FaceitLifetimeStats>(`/players/${encodeURIComponent(playerId)}/stats/cs2`)
   );
 }
 

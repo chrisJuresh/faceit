@@ -9,3 +9,4 @@ data/*.json
 data/*.tmp
 .DS_Store
 npm-debug.log*
+.vercel/
