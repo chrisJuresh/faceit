@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+data/*.json
+data/*.tmp
+CLAUDE.md
+.claude/
+node_modules/
+build/
+.svelte-kit/
+coverage/
