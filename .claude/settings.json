@@ -9,6 +9,9 @@
             "command": "python",
             "args": [
               "-S",
+              "-c",
+              "import os, sys\nevent, script = sys.argv[1:3]\nif not os.path.isfile(script):\n    if event == 'SessionStart':\n        print(f'worktree-per-change: {os.path.basename(script)} is registered as a hook'\n              f' but missing at {script}, so nothing it enforces is enforced.'\n              ' Restore it (git pull, or re-run install.py) or remove the registration.')\n    sys.exit(0)\ndel sys.argv[:2], event\nif not getattr(sys.flags, 'safe_path', False):\n    sys.path[0] = os.path.dirname(os.path.realpath(script))\nwith open(script, 'rb') as source:\n    code = compile(source.read(), script, 'exec')\n__file__ = script\nexec(code)",
+              "PreToolUse",
               "${CLAUDE_PROJECT_DIR}/.claude/hooks/worktree-guard.py"
             ],
             "timeout": 10,
@@ -24,6 +27,9 @@
             "command": "python",
             "args": [
               "-S",
+              "-c",
+              "import os, sys\nevent, script = sys.argv[1:3]\nif not os.path.isfile(script):\n    if event == 'SessionStart':\n        print(f'worktree-per-change: {os.path.basename(script)} is registered as a hook'\n              f' but missing at {script}, so nothing it enforces is enforced.'\n              ' Restore it (git pull, or re-run install.py) or remove the registration.')\n    sys.exit(0)\ndel sys.argv[:2], event\nif not getattr(sys.flags, 'safe_path', False):\n    sys.path[0] = os.path.dirname(os.path.realpath(script))\nwith open(script, 'rb') as source:\n    code = compile(source.read(), script, 'exec')\n__file__ = script\nexec(code)",
+              "PreToolUse",
               "${CLAUDE_PROJECT_DIR}/.claude/hooks/worktree-owner.py"
             ],
             "timeout": 10,
@@ -40,6 +46,9 @@
             "command": "python",
             "args": [
               "-S",
+              "-c",
+              "import os, sys\nevent, script = sys.argv[1:3]\nif not os.path.isfile(script):\n    if event == 'SessionStart':\n        print(f'worktree-per-change: {os.path.basename(script)} is registered as a hook'\n              f' but missing at {script}, so nothing it enforces is enforced.'\n              ' Restore it (git pull, or re-run install.py) or remove the registration.')\n    sys.exit(0)\ndel sys.argv[:2], event\nif not getattr(sys.flags, 'safe_path', False):\n    sys.path[0] = os.path.dirname(os.path.realpath(script))\nwith open(script, 'rb') as source:\n    code = compile(source.read(), script, 'exec')\n__file__ = script\nexec(code)",
+              "SessionStart",
               "${CLAUDE_PROJECT_DIR}/.claude/hooks/worktree-guard.py"
             ],
             "timeout": 10
@@ -53,6 +62,9 @@
             "command": "python",
             "args": [
               "-S",
+              "-c",
+              "import os, sys\nevent, script = sys.argv[1:3]\nif not os.path.isfile(script):\n    if event == 'SessionStart':\n        print(f'worktree-per-change: {os.path.basename(script)} is registered as a hook'\n              f' but missing at {script}, so nothing it enforces is enforced.'\n              ' Restore it (git pull, or re-run install.py) or remove the registration.')\n    sys.exit(0)\ndel sys.argv[:2], event\nif not getattr(sys.flags, 'safe_path', False):\n    sys.path[0] = os.path.dirname(os.path.realpath(script))\nwith open(script, 'rb') as source:\n    code = compile(source.read(), script, 'exec')\n__file__ = script\nexec(code)",
+              "SessionStart",
               "${CLAUDE_PROJECT_DIR}/.claude/hooks/worktree-owner.py"
             ],
             "timeout": 10
@@ -68,6 +80,9 @@
             "command": "python",
             "args": [
               "-S",
+              "-c",
+              "import os, sys\nevent, script = sys.argv[1:3]\nif not os.path.isfile(script):\n    if event == 'SessionStart':\n        print(f'worktree-per-change: {os.path.basename(script)} is registered as a hook'\n              f' but missing at {script}, so nothing it enforces is enforced.'\n              ' Restore it (git pull, or re-run install.py) or remove the registration.')\n    sys.exit(0)\ndel sys.argv[:2], event\nif not getattr(sys.flags, 'safe_path', False):\n    sys.path[0] = os.path.dirname(os.path.realpath(script))\nwith open(script, 'rb') as source:\n    code = compile(source.read(), script, 'exec')\n__file__ = script\nexec(code)",
+              "Stop",
               "${CLAUDE_PROJECT_DIR}/.claude/hooks/worktree-guard.py"
             ],
             "timeout": 20
