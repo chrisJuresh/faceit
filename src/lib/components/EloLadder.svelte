@@ -89,7 +89,7 @@
     display: grid;
     gap: 0 12px;
     grid-template-columns: minmax(80px, 112px) minmax(0, 1fr) 48px;
-    height: 24px;
+    height: 28px;
   }
 
   .scale {

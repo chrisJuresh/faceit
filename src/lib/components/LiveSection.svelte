@@ -2,7 +2,6 @@
   import { isActive } from '$lib/columns';
   import { age, score, stopwatch, timeAgo } from '$lib/format';
   import type { GroupGame, LiveMatch, LiveOverview, SquadPlayer } from '$lib/types';
-  import Avatar from './Avatar.svelte';
   import MatchBoard from './MatchBoard.svelte';
 
   let {
@@ -111,7 +110,6 @@
               <ul class="recent">
                 {#each lastPlayed as player (player.playerId)}
                   <li>
-                    <Avatar src={player.avatar} name={player.displayName} />
                     <span class="name" title={player.displayName}>{player.displayName}</span>
                     <span class="mono muted">{age(player.lastMatchAt, clock)}</span>
                   </li>
@@ -183,19 +181,23 @@
     margin-top: 6px;
   }
 
+  /* Most recent first, reading down each column: a ruled list, split into columns as width allows. */
   .recent {
-    display: grid;
-    gap: 10px 32px;
-    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+    column-gap: 40px;
+    columns: 5 150px;
     list-style: none;
     margin: 0;
     padding: 0;
   }
 
   .recent li {
-    align-items: center;
+    align-items: baseline;
+    border-bottom: 1px solid var(--rule);
+    break-inside: avoid;
     display: flex;
-    gap: 8px;
+    gap: 12px;
+    justify-content: space-between;
+    line-height: 28px;
     min-width: 0;
   }
 
@@ -207,8 +209,8 @@
   }
 
   .recent .mono {
+    flex: none;
     font-size: 12px;
-    margin-left: auto;
   }
 
   @media (max-width: 860px) {
@@ -219,8 +221,8 @@
 
   @media (max-width: 640px) {
     .recent {
-      gap: 10px 24px;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 24px;
+      columns: 2;
     }
   }
 </style>

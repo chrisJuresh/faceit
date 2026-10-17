@@ -168,7 +168,7 @@
     display: grid;
     gap: 0 16px;
     grid-template-columns: 52px 150px 72px minmax(0, 1fr) 14px;
-    min-height: 46px;
+    min-height: 40px;
     padding: 6px 4px;
     text-align: left;
     width: 100%;
