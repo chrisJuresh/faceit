@@ -374,34 +374,32 @@
   .pick input,
   .spacer {
     flex: none;
-    height: 14px;
-    margin: 0;
-    width: 14px;
+    height: 12px;
+    margin: 0 1px;
+    width: 12px;
   }
 
-  /* A square in the page's rule colour; ticked, it fills with the accent and shows a check. */
+  /* A hairline ring in the page's rule colour; ticked, it turns accent with an accent dot inside. */
   .pick input {
     appearance: none;
     background: transparent;
     border: 1px solid var(--rule-2);
-    border-radius: 2px;
+    border-radius: 50%;
     cursor: pointer;
     display: grid;
     place-content: center;
   }
 
   .pick input::after {
-    border: solid var(--on-accent);
-    border-width: 0 1.5px 1.5px 0;
+    background: var(--accent);
+    border-radius: 50%;
     content: '';
-    height: 8px;
-    transform: translateY(-1px) rotate(45deg);
+    height: 6px;
     visibility: hidden;
-    width: 4px;
+    width: 6px;
   }
 
   .pick input:checked {
-    background: var(--accent);
     border-color: var(--accent);
   }
 
