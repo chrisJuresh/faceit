@@ -49,8 +49,14 @@
   const records = (player: SquadPlayer): MapRecord[] =>
     scope === 'lifetime' ? player.maps : player.mapForm[scope];
 
-  /** Only players who played a group game in the window can be ticked or unticked. */
-  const eligible = $derived(new Set(lineups.flatMap((game) => game.lines.map((line) => line.playerId))));
+  /**
+   * Only shown players who played a group game can be ticked or unticked. Players the Active
+   * filter hides have no box to untick, so they never count.
+   */
+  const listed = $derived(new Set(players.map((player) => player.playerId)));
+  const eligible = $derived(
+    new Set(lineups.flatMap((game) => game.lines.map((line) => line.playerId)).filter((id) => listed.has(id)))
+  );
   const chosen = $derived(new Set([...eligible].filter((id) => !leftOut.has(id))));
   const together = $derived(togetherMaps(lineups, chosen, scopeCount));
   const togetherGames = $derived([...together.values()].reduce((sum, record) => sum + record.matches, 0));
