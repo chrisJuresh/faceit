@@ -11,18 +11,16 @@
   /**
    * Each player's record per map over their last 30 or 90 matches or FACEIT's lifetime record,
    * with the group's record on top: games where two or more of the ticked players were on the
-   * same team, over the last `windowDays` days.
+   * same team, over the same span (their last 30 or 90 games together, or all of them).
    */
   let {
     players,
     lineups,
-    mapImages,
-    windowDays
+    mapImages
   }: {
     players: SquadPlayer[];
     lineups: GroupLineup[];
     mapImages: Record<string, string>;
-    windowDays: number;
   } = $props();
 
   type Metric = 'winRate' | 'kd';
@@ -54,9 +52,10 @@
   /** Only players who played a group game in the window can be ticked or unticked. */
   const eligible = $derived(new Set(lineups.flatMap((game) => game.lines.map((line) => line.playerId))));
   const chosen = $derived(new Set([...eligible].filter((id) => !leftOut.has(id))));
-  const together = $derived(togetherMaps(lineups, chosen));
+  const together = $derived(togetherMaps(lineups, chosen, scopeCount));
+  const togetherGames = $derived([...together.values()].reduce((sum, record) => sum + record.matches, 0));
   // Columns follow the whole group's record, so unticking never adds or removes one.
-  const everyone = $derived(togetherMaps(lineups, eligible));
+  const everyone = $derived(togetherMaps(lineups, eligible, scopeCount));
   const leftOutCount = $derived([...leftOut].filter((id) => eligible.has(id)).length);
 
   const rows = $derived(
@@ -151,7 +150,7 @@
             <th class="stick" scope="row">
               <span class="label">Together</span>
               <span class="note">
-                <span class="mono">{windowDays}d</span>{#if leftOutCount}{' · '}<span class="mono">{leftOutCount}</span>
+                <span class="mono">{thousands(togetherGames)}</span> games{#if leftOutCount}{' · '}<span class="mono">{leftOutCount}</span>
                   left out{/if}
               </span>
             </th>

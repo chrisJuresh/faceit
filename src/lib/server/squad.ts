@@ -34,10 +34,11 @@ import {
 
 const OWNER_NICKNAME = env.FACEIT_OWNER_NICKNAME || 'Christian976';
 const DAY = 86_400;
-/** Group numbers cover this many days; busy players get extra pages to reach back that far. */
+/** Group numbers cover this many days, except the Maps Together row, which reads whole histories. */
 export const WINDOW_DAYS = 90;
 const PAGE_SIZE = 100;
-const MAX_PAGES = 3;
+/** Up to 1,500 matches per player, enough for every lifetime in the group so far. */
+const MAX_PAGES = 15;
 const RECENT_MATCHES = 30;
 const GROUP_GAMES = 40;
 const ACTIVITY_WEEKS = 13;
@@ -187,27 +188,35 @@ export function parseLifetime(stats: FaceitLifetimeStats | null, maps: MapStats[
   };
 }
 
-/** Latest page of matches, plus older pages while they still fall inside the window. */
-async function recentMatches(playerId: string, windowStart: number) {
+/**
+ * A player's match history, newest first. Each older page asks for matches up to the oldest one
+ * seen so far, since FACEIT stops paging by offset after 300.
+ */
+async function matchHistory(playerId: string) {
   const matches: HistoryMatch[] = [];
   const seen = new Set<string>();
+  let before: number | undefined;
 
   for (let page = 0; page < MAX_PAGES; page += 1) {
-    const request = getPlayerGameStats(playerId, page * PAGE_SIZE, PAGE_SIZE);
+    const request = getPlayerGameStats(playerId, 0, PAGE_SIZE, before);
     // A failed older page shouldn't throw away the newer matches already parsed.
     const response = page === 0 ? await request : await request.catch(() => null);
     if (!response) break;
     const items = response.items || [];
+    const known = seen.size;
     for (const item of items) {
-      const match = parsePlayerMatch(item);
-      const key = match ? `${match.matchId}:${match.mapNumber}` : '';
-      if (!match || seen.has(key)) continue;
+      // Keyed before parsing, so a page of only wingman still counts as new and paging goes on.
+      const stats = item.stats as Stats;
+      const key = `${stats['Match Id']}:${stats['Match Round']}`;
+      if (seen.has(key)) continue;
       seen.add(key);
-      matches.push(match);
+      const match = parsePlayerMatch(item);
+      if (match) matches.push(match);
     }
 
-    const oldest = items.length ? timestamp(items[items.length - 1].stats as Stats) : 0;
-    if (items.length < PAGE_SIZE || oldest < windowStart) break;
+    // The cursor is inclusive, so the boundary match comes back; a page with nothing new is the end.
+    if (items.length < PAGE_SIZE || seen.size === known) break;
+    before = timestamp(items[items.length - 1].stats as Stats) * 1000;
   }
 
   return matches.sort((a, b) => b.finishedAt - a.finishedAt);
@@ -225,7 +234,7 @@ async function buildPlayer(
 
   const [lifetimeStats, matches] = await Promise.all([
     getLifetimeStats(profile.player_id).catch(() => null),
-    recentMatches(profile.player_id, now - WINDOW_DAYS * DAY).catch(() => [] as HistoryMatch[])
+    matchHistory(profile.player_id).catch(() => [] as HistoryMatch[])
   ]);
 
   // FACEIT leaves players who stopped playing out of its ladders, so only ask for active ones.
@@ -304,7 +313,8 @@ export async function buildSquad(): Promise<SquadOverview> {
 
   const histories = built.map(({ player, matches }) => ({ playerId: player.playerId, matches }));
   const windowStart = now - WINDOW_DAYS * DAY;
-  const games = groupGames(histories).filter((game) => game.finishedAt >= windowStart);
+  const everGames = groupGames(histories);
+  const games = everGames.filter((game) => game.finishedAt >= windowStart);
 
   const mapImages: Record<string, string> = {};
   for (const { player } of built) {
@@ -320,7 +330,7 @@ export async function buildSquad(): Promise<SquadOverview> {
     players: built.map(({ player }) => player).sort((a, b) => b.elo - a.elo),
     mapImages,
     games: games.slice(0, GROUP_GAMES),
-    lineups: games.map(toLineup),
+    lineups: everGames.map(toLineup),
     together: { matches: games.length, wins: games.filter((game) => game.won).length },
     pairs: pairRecords(games),
     activity: weeklyActivity(histories, ACTIVITY_WEEKS, now)

@@ -169,14 +169,18 @@ export function toLineup(game: GroupGame): GroupLineup {
 }
 
 /**
- * Map records for the games where at least two of `chosen` were on the same team. Kills and
- * deaths add up the chosen players only, so leaving someone out removes their share too.
+ * Map records for the games where at least two of `chosen` were on the same team, the latest
+ * `limit` of them when given (lineups are newest first). Kills and deaths add up the chosen
+ * players only, so leaving someone out removes their share too.
  */
-export function togetherMaps(lineups: GroupLineup[], chosen: ReadonlySet<string>) {
+export function togetherMaps(lineups: GroupLineup[], chosen: ReadonlySet<string>, limit = Infinity) {
   const maps = new Map<string, TogetherMap>();
+  let counted = 0;
   for (const game of lineups) {
+    if (counted >= limit) break;
     const lines = game.lines.filter((line) => chosen.has(line.playerId));
     if (lines.length < 2) continue;
+    counted += 1;
     const record = maps.get(game.map) ?? { map: game.map, matches: 0, wins: 0, kills: 0, deaths: 0 };
     record.matches += 1;
     if (game.won) record.wins += 1;

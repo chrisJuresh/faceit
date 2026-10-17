@@ -204,7 +204,7 @@ export interface SquadOverview {
   mapImages: Record<string, string>;
   /** Latest matches where two or more of the group were on the same team. */
   games: GroupGame[];
-  /** Every group game in the window (games is capped), newest first. */
+  /** Every group game in the players' fetched histories, not just the window, newest first. */
   lineups: GroupLineup[];
   together: { matches: number; wins: number };
   pairs: PairRecord[];
