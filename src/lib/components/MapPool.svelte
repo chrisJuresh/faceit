@@ -133,17 +133,19 @@
                 {#if record}
                   {@const value = togetherValue(record)}
                   {@const few = record.matches < FEW_TOGETHER}
+                  {@const lines = [
+                    `Together · ${entry.map}`,
+                    `${record.wins}–${record.matches - record.wins} · ${thousands(record.matches)} games`,
+                    `K/D ${fixed(togetherKd(record), 2)}`
+                  ]}
                   <span
                     class="cell"
                     class:few
                     style:background={few ? undefined : tint(value)}
-                    {...readout(() => [
-                      `Together · ${entry.map}`,
-                      `${record.wins}–${record.matches - record.wins} · ${thousands(record.matches)} games`,
-                      `K/D ${fixed(togetherKd(record), 2)}`
-                    ])}
+                    {...readout(() => lines)}
                   >
-                    <b>{text(value)}</b><small>{thousands(record.matches)}<span class="sr-only"> games</span></small>
+                    <b aria-hidden="true">{text(value)}</b><small aria-hidden="true">{thousands(record.matches)}</small>
+                    <span class="sr-only">{lines.slice(1).join(', ')}</span>
                   </span>
                 {:else}
                   <span class="cell empty"><span aria-hidden="true">—</span><span class="sr-only">No games</span></span>
@@ -178,17 +180,20 @@
               <td>
                 {#if record}
                   {@const few = record.matches < FEW}
+                  {@const lines = [
+                    `${player.displayName} · ${entry.map}`,
+                    `${thousands(record.matches)} matches · ${fixed(record.winRate)}% won`,
+                    `K/D ${fixed(record.kd, 2)} · ADR ${fixed(record.adr, 1)}`
+                  ]}
                   <span
                     class="cell"
                     class:few
                     style:background={few ? undefined : tint(pick(record))}
-                    {...readout(() => [
-                      `${player.displayName} · ${entry.map}`,
-                      `${thousands(record.matches)} matches · ${fixed(record.winRate)}% won`,
-                      `K/D ${fixed(record.kd, 2)} · ADR ${fixed(record.adr, 1)}`
-                    ])}
+                    {...readout(() => lines)}
                   >
-                    <b>{text(pick(record))}</b><small>{thousands(record.matches)}<span class="sr-only"> matches</span></small>
+                    <b aria-hidden="true">{text(pick(record))}</b><small aria-hidden="true">{thousands(record.matches)}</small>
+                    <!-- The row and column headers already name the player and map. -->
+                    <span class="sr-only">{lines.slice(1).join(', ')}</span>
                   </span>
                 {:else}
                   <span class="cell empty"><span aria-hidden="true">—</span><span class="sr-only">No matches</span></span>
@@ -324,6 +329,10 @@
 
   label.pick {
     cursor: pointer;
+  }
+
+  label.pick:has(input:disabled) {
+    cursor: default;
   }
 
   .pick input,

@@ -65,7 +65,7 @@
                   plural(count)
                 ])}
               >
-                {#if count}{count}{:else}<span class="sr-only">0</span>{/if}
+                <span aria-hidden="true">{count || ''}</span><span class="sr-only">{plural(count)}</span>
               </td>
             {/each}
             <td class="total" class:zero={!row.total}>{row.total}</td>

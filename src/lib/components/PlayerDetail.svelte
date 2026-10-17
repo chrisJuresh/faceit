@@ -93,7 +93,7 @@
 
     <div class="form">
       <div class="mini-head">
-        <h4>Last {player.recent.length} matches</h4>
+        <h4 class="block-label">Last <span class="mono">{player.recent.length}</span> matches</h4>
         {#if player.recent.length}
           <div class="seg small" role="group" aria-label="Chart metric">
             {#each METRICS as option (option.key)}
@@ -117,7 +117,7 @@
     </div>
 
     <div class="maps">
-      <div class="mini-head"><h4>Maps, lifetime</h4></div>
+      <div class="mini-head"><h4 class="block-label">Maps, lifetime</h4></div>
       {#if player.maps.length}
         <div class="scroll">
           <table class="mini">
@@ -155,7 +155,7 @@
 
   {#if player.recent.length}
     <div class="matches">
-      <div class="mini-head"><h4>Matches</h4></div>
+      <div class="mini-head"><h4 class="block-label">Matches</h4></div>
       <div class="scroll">
         <table class="mini">
           <thead>
@@ -206,7 +206,7 @@
       </div>
       {#if player.recent.length > 10}
         <button class="text-button more" type="button" onclick={() => (allMatches = !allMatches)}>
-          {allMatches ? 'Show 10' : `Show all ${player.recent.length}`}
+          {#if allMatches}Show <span class="mono">10</span>{:else}Show all <span class="mono">{player.recent.length}</span>{/if}
         </button>
       {/if}
     </div>

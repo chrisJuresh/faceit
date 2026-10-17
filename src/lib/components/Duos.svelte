@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fixed } from '$lib/format';
   import type { PairRecord, SquadPlayer } from '$lib/types';
+  import Divider from './Divider.svelte';
   import WinTrack from './WinTrack.svelte';
 
   let {
@@ -38,7 +39,7 @@
       <button type="button" aria-pressed={order === 'games'} onclick={() => (order = 'games')}>Most played</button>
       <button type="button" aria-pressed={order === 'rate'} onclick={() => (order = 'rate')}>Win %</button>
     </div>
-    <span class="divider" aria-hidden="true"></span>
+    <Divider />
     <div class="seg" role="group" aria-label="Pairs shown">
       <button type="button" aria-pressed={!everyone} onclick={() => (everyone = false)}>3+ matches</button>
       <button type="button" aria-pressed={everyone} onclick={() => (everyone = true)}>

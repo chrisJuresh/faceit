@@ -7,6 +7,7 @@
   import LiveSection from '$lib/components/LiveSection.svelte';
   import MapPool from '$lib/components/MapPool.svelte';
   import OwnerAccess from '$lib/components/OwnerAccess.svelte';
+  import Divider from '$lib/components/Divider.svelte';
   import PlayerTable from '$lib/components/PlayerTable.svelte';
   import Tooltip from '$lib/components/Tooltip.svelte';
   import { isActive } from '$lib/columns';
@@ -41,6 +42,8 @@
     )
   );
   const together = $derived(squad?.together ?? { matches: 0, wins: 0 });
+  /** The ticking clock, never behind the data, so ages can't run backwards on a slow browser clock. */
+  const now = $derived(Math.max(clock, squad?.generatedAt ?? 0));
 
   // A full refresh brings a newer overview than the last poll.
   $effect(() => {
@@ -98,7 +101,7 @@
     <div class="tools">
       {#if squad}
         <span class="stamp" title={dateTime(squad.generatedAt)}>
-          Updated <span class="mono">{timeAgo(squad.generatedAt, Math.max(clock, squad.generatedAt))}</span>
+          Updated <span class="mono">{timeAgo(squad.generatedAt, now)}</span>
         </span>
         <button class="text-button" type="button" onclick={refresh} disabled={refreshing}>
           {refreshing ? 'Refreshing…' : 'Refresh'}
@@ -111,7 +114,7 @@
             All<span class="count">{players.length}</span>
           </button>
         </div>
-        <span class="divider" aria-hidden="true"></span>
+        <Divider />
       {/if}
       <div class="seg theme" role="group" aria-label="Theme">
         <button type="button" class="dark" aria-pressed={theme === 'dark'} onclick={() => setTheme('dark')}>Dark</button>
@@ -128,7 +131,7 @@
 <main class="wrap">
   {#if squad}
     <section id="players" class="section">
-      <PlayerTable players={shown} now={clock} isOwner={data.isOwner} {liveIds} />
+      <PlayerTable players={shown} {now} isOwner={data.isOwner} {liveIds} />
 
       <div class="pair">
         <section aria-labelledby="elo-head">
@@ -163,7 +166,7 @@
           </span>
         {/if}
       </div>
-      <GroupGames games={squad.games} players={byId} mapImages={squad.mapImages} now={clock} />
+      <GroupGames games={squad.games} players={byId} mapImages={squad.mapImages} {now} />
     </section>
 
     <section id="duos" class="section">

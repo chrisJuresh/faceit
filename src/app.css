@@ -116,8 +116,8 @@ p {
   margin: 0;
 }
 
-/* Block labels inside a band or panel. */
-h4 {
+/* Block labels inside a band or panel, whatever their heading level. */
+.block-label {
   color: var(--ink-2);
   font: 600 12px/18px var(--sans);
 }
@@ -663,6 +663,13 @@ th.sorted .sort {
   font: 10.5px var(--mono);
 }
 
+/* The row's chevron, pushed to the end of the name cell. */
+.who .push {
+  flex: none;
+  margin-left: auto;
+  padding-left: 10px;
+}
+
 /* Expand/collapse chevron. */
 .chev {
   color: var(--muted);
@@ -802,10 +809,11 @@ th.sorted .sort {
   color: var(--page);
   font: 11.5px/1.5 var(--mono);
   max-width: 280px;
+  overflow-wrap: anywhere;
   padding: 6px 9px;
   pointer-events: none;
   position: fixed;
-  white-space: nowrap;
+  width: max-content;
   z-index: 30;
 }
 
@@ -820,6 +828,11 @@ th.sorted .sort {
 
   .tbl .stick .who {
     max-width: 136px;
+  }
+
+  /* The 8px gap is enough on phones; the name gets the room. */
+  .who .push {
+    padding-left: 0;
   }
 
   .tbl .who .cc {

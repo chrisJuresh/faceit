@@ -147,7 +147,7 @@
   </div>
   {#if games.length > PAGE}
     <button class="text-button more" type="button" onclick={() => (showAll = !showAll)}>
-      {showAll ? `Show ${PAGE}` : `Show all ${games.length}`}
+      {#if showAll}Show <span class="mono">{PAGE}</span>{:else}Show all <span class="mono">{games.length}</span>{/if}
     </button>
   {/if}
 {:else}

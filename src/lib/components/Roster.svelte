@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { fixed, thousands } from '$lib/format';
+  import { aroundOne, fixed, thousands } from '$lib/format';
   import { sides, teamName } from '$lib/match-board';
   import type { LiveMatch } from '$lib/types';
   import Avatar from './Avatar.svelte';
@@ -81,7 +81,7 @@
             {#if life}
               <td class="gs">{thousands(life.matches)}</td>
               <td>{fixed(life.winRate)}</td>
-              <td class:pos={life.kd >= 1} class:neg={life.kd < 1}>{fixed(life.kd, 2)}</td>
+              <td class={aroundOne(life.kd)}>{fixed(life.kd, 2)}</td>
               <td>{fixed(life.adr, 1)}</td>
               <td>{fixed(life.headshots)}</td>
               <td>{fixed(life.entrySuccess)}</td>
@@ -97,7 +97,7 @@
             {:else if map}
               <td class="gs" class:low={fewOnMap}>{map.matches}</td>
               <td class:low={fewOnMap}>{fixed(map.winRate)}</td>
-              <td class:low={fewOnMap} class:pos={map.kd >= 1} class:neg={map.kd < 1}>{fixed(map.kd, 2)}</td>
+              <td class={aroundOne(map.kd)} class:low={fewOnMap}>{fixed(map.kd, 2)}</td>
               <td class:low={fewOnMap}>{fixed(map.kr, 2)}</td>
               <td class:low={fewOnMap}>{fixed(map.adr, 1)}</td>
               <td class:low={fewOnMap}>{fixed(map.headshots)}</td>

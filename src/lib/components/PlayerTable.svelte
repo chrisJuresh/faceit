@@ -12,10 +12,11 @@
     type Scope,
     type View
   } from '$lib/columns';
-  import { age } from '$lib/format';
+  import { age, aroundOne } from '$lib/format';
   import type { SquadPlayer } from '$lib/types';
   import Avatar from './Avatar.svelte';
   import Chevron from './Chevron.svelte';
+  import Divider from './Divider.svelte';
   import Elo from './Elo.svelte';
   import type { FormMetric } from './FormChart.svelte';
   import PlayerDetail from './PlayerDetail.svelte';
@@ -77,12 +78,8 @@
     return sample !== undefined && sample !== null && sample < 10;
   }
 
-  function aroundOne(column: Column, player: SquadPlayer) {
-    if (!column.aroundOne) return '';
-    const value = column.value(player, scope);
-    // Judge the value as shown, so 0.996 (shown as 1.00) is not coloured as below 1.
-    return value === null ? '' : Number(value.toFixed(column.digits)) >= 1 ? 'pos' : 'neg';
-  }
+  const tone = (column: Column, player: SquadPlayer) =>
+    column.aroundOne ? aroundOne(column.value(player, scope), column.digits) : '';
 
   const toggle = (player: SquadPlayer) => (openId = openId === player.playerId ? null : player.playerId);
 </script>
@@ -100,7 +97,7 @@
         >
       {/each}
     </div>
-    <span class="divider" aria-hidden="true"></span>
+    <Divider />
     <div class="seg" role="group" aria-label="Columns">
       <button type="button" aria-pressed={view === 'core'} onclick={() => (view = 'core')}>Core</button>
       <button type="button" aria-pressed={view === 'duels'} onclick={() => (view = 'duels')}>Duels &amp; utility</button>
@@ -178,7 +175,7 @@
                 </td>
               {:else}
                 <td
-                  class="{aroundOne(column, player)}"
+                  class={tone(column, player)}
                   class:gs={starts.has(column.key)}
                   class:sorted={sorting.key === column.key}
                   class:low={muted(column, player)}
@@ -224,12 +221,6 @@
     flex: none;
     height: 8px;
     width: 8px;
-  }
-
-  .push {
-    flex: none;
-    margin-left: auto;
-    padding-left: 10px;
   }
 
   .players tr.low td.pos,

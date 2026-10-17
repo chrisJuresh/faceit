@@ -93,7 +93,7 @@
         <div class="idle-grid" class:single={!lastGame || !lastPlayed.length}>
           {#if lastGame}
             <div>
-              <h4>Last game together</h4>
+              <h3 class="block-label">Last game together</h3>
               <p class="last-game">
                 {#if lastGame.map}<span class="map">{lastGame.map}</span>{/if}
                 <span class="res" class:win={lastGame.won} class:loss={!lastGame.won}>{lastGame.won ? 'W' : 'L'}</span>
@@ -107,7 +107,7 @@
           {/if}
           {#if lastPlayed.length}
             <div>
-              <h4>Last played</h4>
+              <h3 class="block-label">Last played</h3>
               <ul class="recent">
                 {#each lastPlayed as player (player.playerId)}
                   <li>
@@ -159,7 +159,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  h4 {
+  .block-label {
     margin-bottom: 8px;
   }
 

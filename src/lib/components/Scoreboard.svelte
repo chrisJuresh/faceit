@@ -156,12 +156,6 @@
     text-align: left;
   }
 
-  .push {
-    flex: none;
-    margin-left: auto;
-    padding-left: 10px;
-  }
-
   td.muted {
     color: var(--muted);
     font-size: 12px;
