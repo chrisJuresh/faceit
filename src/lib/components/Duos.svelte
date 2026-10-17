@@ -21,7 +21,8 @@
       .sort((x, y) =>
         order === 'games'
           ? y.matches - x.matches || y.winRate - x.winRate
-          : y.winRate - x.winRate || y.matches - x.matches
+          : // Pairs with fewer than FEW games sit below every pair with more, so a 2–0 can't top the list.
+            Number(y.matches >= FEW) - Number(x.matches >= FEW) || y.winRate - x.winRate || y.matches - x.matches
       )
   );
   const half = $derived(Math.ceil(shown.length / 2));
