@@ -1,57 +1,41 @@
 <script lang="ts">
-  export let src = '';
-  export let name = '';
-  export let size: 'sm' | 'md' | 'lg' | 'xl' = 'md';
-  let failed = false;
+  let { src = '', name = '', size = 28 }: { src?: string; name?: string; size?: number } = $props();
+  let failed = $state(false);
 
-  $: initials = name
-    .split(/\s+/)
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
+  const initials = $derived(
+    name
+      .replace(/[^\p{L}\p{N}\s_-]/gu, '')
+      .split(/[\s_-]+/)
+      .filter(Boolean)
+      .map((part) => part[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() || '?'
+  );
 </script>
 
-<span class:sm={size === 'sm'} class:lg={size === 'lg'} class:xl={size === 'xl'} class="avatar">
+<span class="avatar" style:--size="{size}px">
   {#if src && !failed}
-    <img src={src} alt="" on:error={() => (failed = true)} />
+    <img {src} alt="" loading="lazy" onerror={() => (failed = true)} />
   {:else}
-    <span aria-hidden="true">{initials || '?'}</span>
+    <span aria-hidden="true">{initials}</span>
   {/if}
 </span>
 
 <style>
   .avatar {
     align-items: center;
-    background: linear-gradient(145deg, var(--surface-raised), var(--surface-quiet));
-    border: 1px solid var(--border-strong);
+    background: var(--surface-2);
     border-radius: 50%;
-    color: var(--text-strong);
+    color: var(--text-2);
     display: inline-flex;
-    flex: 0 0 auto;
-    font-size: 0.72rem;
-    font-weight: 700;
-    height: 42px;
+    flex: none;
+    font-size: calc(var(--size) * 0.36);
+    font-weight: 600;
+    height: var(--size);
     justify-content: center;
     overflow: hidden;
-    width: 42px;
-  }
-
-  .avatar.sm {
-    height: 30px;
-    width: 30px;
-  }
-
-  .avatar.lg {
-    font-size: 1rem;
-    height: 58px;
-    width: 58px;
-  }
-
-  .avatar.xl {
-    font-size: 1.25rem;
-    height: 76px;
-    width: 76px;
+    width: var(--size);
   }
 
   img {
