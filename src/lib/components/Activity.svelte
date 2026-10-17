@@ -136,7 +136,7 @@
         <tr>
           <th class="stick"><span class="sr-only">Player</span></th>
           {#each table.columns as column (column.start)}
-            <th scope="col">
+            <th class="period" scope="col">
               {#if column.label}
                 <span class="week" aria-hidden="true">{column.label}</span>
               {/if}
@@ -144,6 +144,7 @@
             </th>
           {/each}
           <th class="total" scope="col">Total</th>
+          <td class="fill" aria-hidden="true"></td>
         </tr>
       </thead>
       <tbody>
@@ -166,6 +167,7 @@
               </td>
             {/each}
             <td class="total" class:zero={!row.total}>{row.total}</td>
+            <td class="fill" aria-hidden="true"></td>
           </tr>
         {/each}
       </tbody>
@@ -181,12 +183,24 @@
     margin: 0 -2px;
   }
 
-  /* Fills its column: the periods share the width, the name and total columns stay narrow. */
+  /*
+   * Fills its column: the periods share the width up to 44px each, the name and total columns stay
+   * narrow, and the trailing fill column takes whatever is left so a few years don't stretch wide.
+   */
   .activity {
     border-collapse: separate;
     border-spacing: 2px;
     white-space: nowrap;
     width: 100%;
+  }
+
+  .period {
+    width: 44px;
+  }
+
+  .fill {
+    background: none;
+    min-width: 0;
   }
 
   th {
