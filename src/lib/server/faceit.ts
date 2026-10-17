@@ -257,6 +257,22 @@ export function getRecentHistory(playerId: string, limit: number) {
   );
 }
 
+/**
+ * Up to 100 of a player's CS2 matches that finished at or before `to`, newest first. The history
+ * endpoint caps its offset at 1000, so walking further back moves `to` instead.
+ */
+export function getHistoryUntil(playerId: string, to: number) {
+  return cached(
+    `history-until:${playerId}:${to}`,
+    10 * MINUTE,
+    () =>
+      request<{ items: FaceitHistoryMatch[] }>(
+        `/players/${encodeURIComponent(playerId)}/history?game=cs2&from=0&to=${to}&offset=0&limit=100`
+      ),
+    50 * MINUTE
+  );
+}
+
 export function getMatch(matchId: string) {
   return cached(`match:${matchId}`, 10_000, () =>
     request<FaceitMatch>(`/matches/${encodeURIComponent(matchId)}`)
