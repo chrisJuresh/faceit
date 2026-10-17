@@ -1,45 +1,49 @@
 # Stackline
 
-Stackline is a server-rendered SvelteKit dashboard for understanding the people who regularly queue with `Christian976` on FACEIT. It turns the supported FACEIT Data API into a polished, shareable view of teammate impact, recent chemistry, form, maps, and match history without exposing the API key to visitors.
+Stackline is a server-rendered SvelteKit page for one group of friends on FACEIT: the owner account (`Christian976` by default) and everyone on its FACEIT friends list who has a CS2 profile. It reads the public FACEIT Data API on the server, so the API key never reaches visitors.
 
-## What it includes
+## The page
 
-- Match lookbacks of 5, 10, 15, 25, 50, or 100 owner matches; the default is 15.
-- Automatic discovery of FACEIT friends who appeared on the owner's team in that window.
-- A recent-teammate fallback if none of those players are currently FACEIT friends.
-- Swing-first rankings, trend lines, win rate, ADR, K/D, K/R, entry success, current ELO, and level.
-- Player drill-downs with shared map splits and recent matches together.
-- Owner form, map intelligence, match links, teammate frequency, search, sorting, and sharing.
-- Responsive desktop/mobile layouts and light/dark themes.
-- Owner-only aliases backed by a signed, HTTP-only session and server-side persistence.
-- A **Live** page (`/live`) that watches the owner and their FACEIT friends, auto-refreshes, and shows a match board for every active or just-finished match.
-- In-memory request caching, bounded concurrency, rate-limit retries, health checks, security headers, and a production Docker image.
+One page, top to bottom:
 
-## API limitations and the fallback model
+1. **Live.** Whether anyone in the group is in a FACEIT match right now, with everything FACEIT publishes about it. A match that finished in the last hour stays here with its final score.
+2. **Highlights** (planned). Clips extracted from match demos will sit here: one main highlight per game and one per player per game.
+3. **Players.** Every player's FACEIT numbers in one sortable table, switchable between their last 10, 30 or 100 matches and FACEIT's lifetime record, with a detail view per player.
+4. **Charts and group records.** Games played together, duo records, map pool and activity.
 
-The public FACEIT Data API exposes friends, match history, rosters, and match statistics. It does **not** expose historical party/lobby membership, so a past five-player team cannot be reliably split into a premade party and solo teammates. Stackline therefore uses the requested supported fallback:
+Only numbers FACEIT publishes are shown, or plain arithmetic on them (totals, rates, counts). There is no estimated rating, swing or impact score: FACEIT's Data API doesn't publish one.
 
-1. Find the owner's teammates inside the selected match window.
-2. Keep the teammates who are present in the owner's current `friends_ids` list.
-3. If there are no matching friends, show all recent teammates from that window.
+## Where the numbers come from
 
-Players disappear automatically when they no longer occur inside the selected lookback.
+| Data | FACEIT endpoint | Used for |
+| --- | --- | --- |
+| Profile, ELO, level, friends | `/players`, `/players/{id}` | Who is in the group, current ELO and level, Steam and FACEIT links |
+| Lifetime record | `/players/{id}/stats/cs2` | Lifetime columns, entry/clutch/utility/flash rates, per-map records |
+| Per-match stats | `/players/{id}/games/cs2/stats` | Last 10/30/100 summaries, recent matches, games together, duos, activity |
+| Ladder position | `/rankings/games/cs2/regions/{region}/players/{id}` | Regional and national rank (FACEIT leaves inactive players unranked) |
+| Match room and stats | `/matches/{id}`, `/matches/{id}/stats` | Live and finished match boards |
 
-FACEIT's proprietary Season 8 Round Swing is also not currently present in the public Data API. Stackline checks for official `Round Swing`/`Swing` fields and will use them if FACEIT adds them. Until then, values marked **EST.** are a transparent team-relative impact estimate built from public ADR, K/R, K/D, assists per round, entry success, and utility damage. It is intentionally labelled as an estimate everywhere it appears.
+Notes on FACEIT's fields:
 
-## Live match board
+- Lifetime `K/D Ratio` and `Total Headshots %` are running sums, so Stackline uses `Average K/D Ratio` and `Average Headshots %`. Lifetime K/R is total kills over total rounds across the 5v5 map records.
+- Last-N summaries are totals, not averages of per-match ratios: K/D is kills over deaths, ADR is damage over rounds, HS% is headshot kills over kills.
+- Wingman and 1v1 matches are left out. Two friends count as teammates in a match when FACEIT lists them on the same team.
+- Group numbers (games together, duos, map record, activity) cover the last 90 days. Each player's latest 100 matches are always read; busier players get up to two more pages to reach back 90 days.
+- FACEIT allows 20 requests per second per key. Requests are throttled to stay under it, and results are cached in memory, with stale values served while a background refresh runs.
 
-`/live` checks the owner and every FACEIT friend for matches, refreshing every 20 seconds while a match is active and every 60 seconds otherwise (paused while the tab is hidden). For each match it shows everything the public Data API offers:
+## Live matches
 
-- **Before and during the match:** status, competition, region, server location, map (with artwork), elapsed time, both rosters with captain, level, ELO, membership and Steam name, FACEIT's pre-match win probability, and each player's lifetime CS2 record (matches, win rate, K/D, ADR, HS%, entry success, 1v1 rate, streaks, recent results) plus their record on the current map. A team comparison strip sums these up.
-- **After the match:** final and half/overtime scores, round count, and a full stat sheet per player (K/D/A, +/-, K/D, K/R, ADR, HS%, MVPs, first kills, entries, clutches, multi-kills, utility damage, enemies flashed, Stackline's estimated impact). Each row expands to list every raw stat FACEIT returned.
+The page polls `/api/live` every 20 seconds while someone is in a match and every 60 seconds otherwise, and pauses while the tab is hidden. For each match it shows everything the public Data API offers:
 
-You can also paste any FACEIT match room link or match ID into the lookup box to open its board.
+- **Before and during the match:** status, competition, region, server location, map, elapsed time, both rosters with captain, level, ELO and Steam name, FACEIT's win probability, and each player's lifetime CS2 record (matches, win rate, K/D, ADR, HS%, entry success, 1v1 rate, streaks, recent results) plus their record on the current map.
+- **After the match:** final and half/overtime scores, round count, the demo link when FACEIT publishes one, and a full stat sheet per player (K/D/A, K/D, K/R, ADR, HS%, MVPs, first kills, entries, clutches, multi-kills, utility damage, enemies flashed, sniper kills), plus every raw stat FACEIT returned.
+
+`/live` redirects to the main page.
 
 **Data API limits.** The public Data API has no "current match for player" endpoint and doesn't publish live round scores, so the board can't show a round-by-round score while a match is in progress. Matches are found two ways:
 
 1. Polling each tracked player's latest match history. This catches every match once FACEIT lists it, and anything that finished in the last 60 minutes.
-2. Optional FACEIT webhooks (recommended for true live detection). Create a webhook subscription in FACEIT App Studio for the owner and friends, covering the `match_status_*` events. Point it at `https://<your-host>/api/webhooks/faceit`, add a custom security header, and set `FACEIT_WEBHOOK_SECRET` (and `FACEIT_WEBHOOK_HEADER` if you don't use the default `x-webhook-secret`) to match. The endpoint returns 404 while the secret is unset. Webhook state is in memory, so it resets on restart. The endpoint must be reachable over public HTTPS.
+2. Optional FACEIT webhooks (recommended for true live detection). Create a webhook subscription in FACEIT App Studio for the owner and friends, covering the `match_status_*` events. Point it at `https://<your-host>/api/webhooks/faceit`, add a custom security header, and set `FACEIT_WEBHOOK_SECRET` (and `FACEIT_WEBHOOK_HEADER` if you don't use the default `x-webhook-secret`) to match. The endpoint returns 404 while the secret is unset. Without Redis, webhook state is in memory and resets on restart. The endpoint must be reachable over public HTTPS.
 
 ## Local setup
 
