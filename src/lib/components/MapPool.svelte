@@ -5,12 +5,14 @@
   import type { GroupLineup, MapStats, SquadPlayer, TogetherMap } from '$lib/types';
   import { SvelteSet } from 'svelte/reactivity';
   import Avatar from './Avatar.svelte';
+  import Divider from './Divider.svelte';
   import MapImage from './MapImage.svelte';
   import WinTrack from './WinTrack.svelte';
 
   /**
-   * Each player's lifetime record per map, and beside it the group's record: games where two or
-   * more of the counted players were on the same team, over the last `windowDays` days.
+   * Each player's record per map over their last 30 or 90 matches or FACEIT's lifetime record, and
+   * beside it the group's record: games where two or more of the counted players were on the same
+   * team, over the last `windowDays` days.
    */
   let {
     players,
@@ -25,14 +27,32 @@
   } = $props();
 
   type Metric = 'winRate' | 'kd';
-  /** Lifetime cells with fewer matches than this stay uncoloured; Together rows below FEW_TOGETHER are muted. */
-  const FEW = 10;
+  type Scope = 'last30' | 'last90' | 'lifetime';
+  /** The fields a heatmap cell reads, shared by FACEIT's lifetime map records and recent runs. */
+  type MapRecord = Pick<MapStats, 'map' | 'matches' | 'winRate' | 'kd' | 'adr'>;
+
+  const SCOPES: Array<{ key: Scope; label: string; count?: number }> = [
+    { key: 'last30', label: 'Last 30', count: 30 },
+    { key: 'last90', label: 'Last 90', count: 90 },
+    { key: 'lifetime', label: 'Lifetime' }
+  ];
+  /**
+   * Cells with fewer matches than this stay uncoloured. A shorter run spreads fewer matches over
+   * the same maps, so its bar is lower. Together rows below FEW_TOGETHER are muted.
+   */
+  const FEW: Record<Scope, number> = { last30: 3, last90: 5, lifetime: 10 };
   const FEW_TOGETHER = 5;
 
   let metric = $state<Metric>('winRate');
+  let scope = $state<Scope>('lifetime');
   const leftOut = new SvelteSet<string>();
 
-  const rows = $derived([...players].filter((player) => player.maps.length).sort((a, b) => b.elo - a.elo));
+  const few = $derived(FEW[scope]);
+  const scopeCount = $derived(SCOPES.find((option) => option.key === scope)?.count);
+  const records = (player: SquadPlayer): MapRecord[] =>
+    scope === 'lifetime' ? player.maps : player.mapForm[scope];
+
+  const rows = $derived([...players].filter((player) => records(player).length).sort((a, b) => b.elo - a.elo));
 
   /** Only players who played a group game in the window can be counted or left out. */
   const eligible = $derived(new Set(lineups.flatMap((game) => game.lines.map((line) => line.playerId))));
@@ -55,20 +75,16 @@
   );
   const leftOutCount = $derived([...leftOut].filter((id) => eligible.has(id)).length);
 
-  // Maps the shown players have played at least 10 times between them, most played first.
+  // Maps the shown players have played at least `few` times between them, most played first.
   const maps = $derived.by(() => {
-    const totals = new Map<string, { matches: number; image: string }>();
+    const totals = new Map<string, number>();
     for (const player of rows) {
-      for (const record of player.maps) {
-        const entry = totals.get(record.map) ?? { matches: 0, image: record.image || mapImages[record.map] || '' };
-        entry.matches += record.matches;
-        totals.set(record.map, entry);
-      }
+      for (const record of records(player)) totals.set(record.map, (totals.get(record.map) ?? 0) + record.matches);
     }
     return [...totals.entries()]
-      .filter(([, entry]) => entry.matches >= FEW)
-      .sort((a, b) => b[1].matches - a[1].matches)
-      .map(([map, entry]) => ({ map, image: entry.image }));
+      .filter(([, matches]) => matches >= few)
+      .sort((a, b) => b[1] - a[1])
+      .map(([map]) => ({ map, image: mapImages[map] ?? '' }));
   });
 
   const clamp = (value: number) => Math.max(-1, Math.min(1, value));
@@ -82,7 +98,7 @@
   };
   const text = (value: number) => (metric === 'winRate' ? fixed(value) : fixed(value, 2));
 
-  const pick = (record: MapStats) => (metric === 'winRate' ? record.winRate : record.kd);
+  const pick = (record: MapRecord) => (metric === 'winRate' ? record.winRate : record.kd);
   const togetherKd = (record: TogetherMap) => (record.deaths ? record.kills / record.deaths : record.kills);
   const togetherRate = (record: TogetherMap) => (record.wins / record.matches) * 100;
 
@@ -102,13 +118,25 @@
 </div>
 
 <div class="layout" class:single={lineups.length === 0}>
-  <section aria-labelledby="lifetime-head">
+  <section aria-labelledby="player-maps-head">
     <div class="block-head">
-      <h3 id="lifetime-head" class="block-label">Lifetime</h3>
-      <span class="meta">Per player, 5v5</span>
-      <div class="seg" role="group" aria-label="Map metric">
-        <button type="button" aria-pressed={metric === 'winRate'} onclick={() => (metric = 'winRate')}>Win %</button>
-        <button type="button" aria-pressed={metric === 'kd'} onclick={() => (metric = 'kd')}>K/D</button>
+      <h3 id="player-maps-head" class="block-label">Per player</h3>
+      <span class="meta">
+        {#if scopeCount}Last <span class="mono">{scopeCount}</span> matches{:else}Lifetime{/if}, 5v5
+      </span>
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Map matches counted">
+          {#each SCOPES as option (option.key)}
+            <button type="button" aria-pressed={scope === option.key} onclick={() => (scope = option.key)}
+              >{option.label}</button
+            >
+          {/each}
+        </div>
+        <Divider />
+        <div class="seg" role="group" aria-label="Map metric">
+          <button type="button" aria-pressed={metric === 'winRate'} onclick={() => (metric = 'winRate')}>Win %</button>
+          <button type="button" aria-pressed={metric === 'kd'} onclick={() => (metric = 'kd')}>K/D</button>
+        </div>
       </div>
     </div>
 
@@ -136,10 +164,10 @@
                   </span>
                 </th>
                 {#each maps as entry (entry.map)}
-                  {@const record = player.maps.find((candidate) => candidate.map === entry.map)}
+                  {@const record = records(player).find((candidate) => candidate.map === entry.map)}
                   <td>
                     {#if record}
-                      {@const few = record.matches < FEW}
+                      {@const thin = record.matches < few}
                       {@const lines = [
                         `${player.displayName} · ${entry.map}`,
                         `${thousands(record.matches)} matches · ${fixed(record.winRate)}% won`,
@@ -147,8 +175,8 @@
                       ]}
                       <span
                         class="cell"
-                        class:few
-                        style:background={few ? undefined : tint(pick(record))}
+                        class:few={thin}
+                        style:background={thin ? undefined : tint(pick(record))}
                         {...readout(() => lines)}
                       >
                         <b aria-hidden="true">{text(pick(record))}</b><small aria-hidden="true">{thousands(record.matches)}</small>
@@ -175,7 +203,7 @@
           {metric === 'winRate' ? 'win %' : 'K/D'}
         </span>
         <span class="key">Small figure: matches</span>
-        <span class="key">Uncoloured: under <span class="mono">{FEW}</span> matches</span>
+        <span class="key">Uncoloured: under <span class="mono">{few}</span> matches</span>
       </p>
     {:else}
       <p class="none">No map stats</p>
@@ -280,7 +308,14 @@
     min-height: 28px;
   }
 
-  .block-head .seg,
+  .block-head .controls {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+  }
+
+  .block-head .controls,
   .block-head .reset {
     margin-left: auto;
   }
@@ -460,7 +495,7 @@
       max-width: 91px;
     }
 
-    .block-head .seg {
+    .block-head .controls {
       margin-left: 0;
     }
   }

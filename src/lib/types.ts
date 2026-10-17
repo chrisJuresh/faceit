@@ -116,6 +116,16 @@ export interface Summary {
   pentaKills: number;
 }
 
+/** A player's record on one map over a run of their latest matches, counted like a Summary. */
+export interface MapForm {
+  map: string;
+  matches: number;
+  wins: number;
+  winRate: number;
+  kd: number;
+  adr: number;
+}
+
 export interface SquadPlayer {
   playerId: string;
   nickname: string;
@@ -140,6 +150,8 @@ export interface SquadPlayer {
   recent: PlayerMatch[];
   /** Summaries over the latest 10, 30 and 100 matches. */
   form: { last10: Summary | null; last30: Summary | null; last100: Summary | null };
+  /** Per-map records over the latest 30 and 90 matches, most played first. */
+  mapForm: { last30: MapForm[]; last90: MapForm[] };
   /** Matches played in the last 7, 30 and 90 days. */
   played: { days7: number; days30: number; days90: number };
   lastMatchAt: number | null;

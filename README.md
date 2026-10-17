@@ -9,7 +9,7 @@ One page, top to bottom:
 1. **Live.** Whether anyone in the group is in a FACEIT match right now, with everything FACEIT publishes about it. A match that finished in the last hour stays here with its final score.
 2. **Highlights** (planned). Clips extracted from match demos will sit here: one main highlight per game and one per player per game.
 3. **Players.** Every player's FACEIT numbers in one sortable table (K/D first), switchable between their last 10, 30 or 100 matches and FACEIT's lifetime record, with a detail view per player.
-4. **Maps.** Each player's lifetime record per map, with the group's record together beside it (switch a player off under Counting to leave them out of it).
+4. **Maps.** Each player's record per map, switchable between their last 30 or 90 matches and FACEIT's lifetime record, with the group's record together over the last 90 days beside it (switch a player off under Counting to leave them out of it). A map cell stays uncoloured under 3 matches for the last 30, 5 for the last 90 and 10 for lifetime.
 5. **ELO, activity, games and duos.** Each player's ELO against FACEIT's level bands and their matches per week, the games played together, and duo records.
 
 The masthead's Active / All switch applies to every per-player view.
@@ -21,15 +21,15 @@ Only numbers FACEIT publishes are shown, or plain arithmetic on them (totals, ra
 | Data | FACEIT endpoint | Used for |
 | --- | --- | --- |
 | Profile, ELO, level, friends | `/players`, `/players/{id}` | Who is in the group, current ELO and level, Steam and FACEIT links |
-| Lifetime record | `/players/{id}/stats/cs2` | Lifetime columns, entry/clutch/utility/flash rates, per-map records |
-| Per-match stats | `/players/{id}/games/cs2/stats` | Last 10/30/100 summaries, recent matches, games together, duos, activity |
+| Lifetime record | `/players/{id}/stats/cs2` | Lifetime columns, entry/clutch/utility/flash rates, lifetime per-map records |
+| Per-match stats | `/players/{id}/games/cs2/stats` | Last 10/30/100 summaries, last 30/90 per-map records, recent matches, games together, duos, activity |
 | Ladder position | `/rankings/games/cs2/regions/{region}/players/{id}` | Regional and national rank (FACEIT leaves inactive players unranked) |
 | Match room and stats | `/matches/{id}`, `/matches/{id}/stats` | Live and finished match boards |
 
 Notes on FACEIT's fields:
 
 - Lifetime `K/D Ratio` and `Total Headshots %` are running sums, so Stackline uses `Average K/D Ratio` and `Average Headshots %`. Lifetime K/R is total kills over total rounds across the 5v5 map records.
-- Last-N summaries are totals, not averages of per-match ratios: K/D is kills over deaths, ADR is damage over rounds, HS% is headshot kills over kills.
+- Last-N summaries, per-map ones included, are totals, not averages of per-match ratios: K/D is kills over deaths, ADR is damage over rounds, HS% is headshot kills over kills. Lifetime per-map K/D is FACEIT's `Average K/D Ratio`, a mean of per-match ratios, so it reads a little differently from the last 30/90 per-map K/D.
 - Wingman and 1v1 matches are left out. Two friends count as teammates in a match when FACEIT lists them on the same team.
 - Group numbers (games together, duos, map record, activity) cover the last 90 days. Each player's latest 100 matches are always read; busier players get up to two more pages to reach back 90 days.
 - FACEIT allows 20 requests per second per key. Requests are throttled to stay under it, and results are cached in memory, with stale values served while a background refresh runs.

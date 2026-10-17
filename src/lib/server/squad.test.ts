@@ -117,6 +117,12 @@ describe('parseMaps', () => {
     expect(maps.map((map) => map.map)).toEqual(['Mirage', 'Dust2']);
     expect(maps[0]).toMatchObject({ matches: 39, winRate: 62, entrySuccess: 50, image: 'https://cdn.example/mirage.jpg' });
   });
+
+  it('names maps the way per-match stats do, so recent and lifetime records line up', () => {
+    const names = parseMaps(lifetime).map((map) => map.map);
+    expect(names).toContain(parsePlayerMatch(item())?.map);
+    expect(names).toContain(parsePlayerMatch(item({ Map: 'de_dust2' }))?.map);
+  });
 });
 
 describe('parseLifetime', () => {
