@@ -168,16 +168,22 @@ describe('together maps', () => {
     });
   });
 
-  it('counts every game when everyone is chosen', () => {
+  it('counts only the games every chosen player was in', () => {
     const maps = togetherMaps(lineups, new Set(['a', 'b', 'c']));
-    expect(maps.get('Mirage')).toEqual({ map: 'Mirage', matches: 2, wins: 1, kills: 50, deaths: 25 });
-    expect(maps.get('Dust2')?.matches).toBe(1);
+    expect(maps.get('Mirage')).toEqual({ map: 'Mirage', matches: 1, wins: 1, kills: 30, deaths: 15 });
+    expect(maps.has('Dust2')).toBe(false);
   });
 
-  it('drops games left with fewer than two chosen teammates, and their kills', () => {
-    const maps = togetherMaps(lineups, new Set(['a', 'b']));
-    expect(maps.get('Mirage')).toEqual({ map: 'Mirage', matches: 1, wins: 1, kills: 20, deaths: 10 });
+  it('keeps a game whoever else played, adding up the chosen players only', () => {
+    const maps = togetherMaps(lineups, new Set(['a', 'c']));
+    expect(maps.get('Mirage')).toEqual({ map: 'Mirage', matches: 2, wins: 1, kills: 40, deaths: 20 });
     expect(maps.has('Dust2')).toBe(false);
+  });
+
+  it('counts games with any `need` of the chosen when asked', () => {
+    const maps = togetherMaps(lineups, new Set(['a', 'b', 'c']), Infinity, 2);
+    expect(maps.get('Mirage')?.matches).toBe(2);
+    expect(maps.get('Dust2')?.matches).toBe(1);
   });
 
   it('stops after the latest `limit` games the chosen played together', () => {

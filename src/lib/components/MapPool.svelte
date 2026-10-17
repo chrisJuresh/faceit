@@ -10,8 +10,8 @@
 
   /**
    * Each player's record per map over their last 30 or 90 matches or FACEIT's lifetime record,
-   * with the group's record on top: games where two or more of the ticked players were on the
-   * same team, over the same span (their last 30 or 90 games together, or all of them). When a
+   * with the group's record on top: games where every ticked player was on the same team, whoever
+   * else played, over the same span (their last 30 or 90 games together, or all of them). When a
    * history was cut short, `togetherFrom` says how far back the games go, and the row says so
    * rather than pass for a lifetime record.
    */
@@ -46,7 +46,7 @@
 
   let metric = $state<Metric>('winRate');
   let scope = $state<Scope>('lifetime');
-  const leftOut = new SvelteSet<string>();
+  const picked = new SvelteSet<string>();
 
   const few = $derived(FEW[scope]);
   const scopeCount = $derived(SCOPES.find((option) => option.key === scope)?.count);
@@ -54,19 +54,19 @@
     scope === 'lifetime' ? player.maps : player.mapForm[scope];
 
   /**
-   * Only shown players who played a group game can be ticked or unticked. Players the Active
-   * filter hides have no box to untick, so they never count.
+   * Only shown players who played a group game can be ticked. Players the Active filter hides have
+   * no box, so they never count.
    */
   const listed = $derived(new Set(players.map((player) => player.playerId)));
   const eligible = $derived(
     new Set(lineups.flatMap((game) => game.lines.map((line) => line.playerId)).filter((id) => listed.has(id)))
   );
-  const chosen = $derived(new Set([...eligible].filter((id) => !leftOut.has(id))));
-  const together = $derived(togetherMaps(lineups, chosen, scopeCount));
+  const chosen = $derived(new Set([...picked].filter((id) => eligible.has(id))));
+  // Games every ticked player was in, whoever else played; nothing until two are ticked.
+  const together = $derived(chosen.size >= 2 ? togetherMaps(lineups, chosen, scopeCount) : new Map<string, TogetherMap>());
   const togetherGames = $derived([...together.values()].reduce((sum, record) => sum + record.matches, 0));
-  // Columns follow the whole group's record, so unticking never adds or removes one.
-  const everyone = $derived(togetherMaps(lineups, eligible, scopeCount));
-  const leftOutCount = $derived([...leftOut].filter((id) => eligible.has(id)).length);
+  // Columns follow any two of the group playing together, so ticking never adds or removes one.
+  const everyone = $derived(togetherMaps(lineups, eligible, scopeCount, 2));
 
   const rows = $derived(
     [...players]
@@ -110,12 +110,9 @@
 
   const steps = $derived(metric === 'winRate' ? [30, 40, 50, 60, 70] : [0.5, 0.75, 1, 1.25, 1.5]);
 
-  function toggle(playerId: string, event: Event) {
-    const box = event.currentTarget as HTMLInputElement;
-    if (leftOut.has(playerId)) leftOut.delete(playerId);
-    // Together needs two people; the box is disabled at two, this is a backstop.
-    else if (chosen.size <= 2) box.checked = true;
-    else leftOut.add(playerId);
+  function toggle(playerId: string) {
+    if (picked.has(playerId)) picked.delete(playerId);
+    else picked.add(playerId);
   }
 </script>
 
@@ -160,9 +157,9 @@
             <th class="stick" scope="row">
               <span class="label">Together</span>
               <span class="note">
-                <span class="mono">{thousands(togetherGames)}</span> games{#if togetherFrom && (!scopeCount || togetherGames < scopeCount)}
-{' '}since {monthYear(togetherFrom)}{/if}{#if leftOutCount}{' · '}<span class="mono">{leftOutCount}</span>
-                  left out{/if}
+                {#if chosen.size < 2}Tick two or more players{:else}<span class="mono">{thousands(togetherGames)}</span>
+                  games{#if togetherFrom && (!scopeCount || togetherGames < scopeCount)}
+                    since {monthYear(togetherFrom)}{/if}{/if}
               </span>
             </th>
             {#each maps as entry (entry.map)}
@@ -193,17 +190,15 @@
           </tr>
         {/if}
         {#each rows as player (player.playerId)}
-          {@const included = !leftOut.has(player.playerId)}
           {@const canPick = eligible.has(player.playerId)}
           <tr>
             <th class="stick" scope="row">
-              <svelte:element this={canPick ? 'label' : 'span'} class="pick" class:out={canPick && !included}>
+              <svelte:element this={canPick ? 'label' : 'span'} class="pick">
                 {#if canPick}
                   <input
                     type="checkbox"
-                    checked={included}
-                    disabled={included && chosen.size <= 2}
-                    onchange={(event) => toggle(player.playerId, event)}
+                    checked={picked.has(player.playerId)}
+                    onchange={() => toggle(player.playerId)}
                     aria-label="Count {player.displayName} in Together"
                   />
                 {:else}
@@ -434,10 +429,6 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .pick.out .name {
-    color: var(--muted);
   }
 
   .scale {
