@@ -2,6 +2,7 @@ import { env } from '$env/dynamic/private';
 import {
   countSince,
   groupGames,
+  mapForm,
   pairRecords,
   summarize,
   toLineup,
@@ -267,6 +268,10 @@ async function buildPlayer(
       last10: summarize(matches.slice(0, 10)),
       last30: summarize(matches.slice(0, 30)),
       last100: summarize(matches.slice(0, 100))
+    },
+    mapForm: {
+      last30: mapForm(matches.slice(0, 30)),
+      last90: mapForm(matches.slice(0, 90))
     },
     played: {
       days7: countSince(matches, now - 7 * DAY),

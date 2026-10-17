@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   groupGames,
+  mapForm,
   pairRecords,
   summarize,
   toLineup,
@@ -61,6 +62,38 @@ describe('summarize', () => {
   it('falls back to per-match ADR when raw damage is missing', () => {
     const summary = summarize([match({ damage: 0, adr: 80 }), match({ damage: 0, adr: 60 })])!;
     expect(summary.adr).toBe(70);
+  });
+});
+
+describe('mapForm', () => {
+  it('returns no maps without matches', () => {
+    expect(mapForm([])).toEqual([]);
+  });
+
+  it('splits matches by map, most played first, ties by name', () => {
+    const maps = mapForm([
+      match({ map: 'Nuke' }),
+      match({ map: 'Dust2' }),
+      match({ map: 'Mirage' }),
+      match({ map: 'Dust2', won: false }),
+      match({ map: 'Ancient' })
+    ]);
+    expect(maps.map((map) => [map.map, map.matches])).toEqual([
+      ['Dust2', 2],
+      ['Ancient', 1],
+      ['Mirage', 1],
+      ['Nuke', 1]
+    ]);
+    expect(maps[0]).toMatchObject({ wins: 1, winRate: 50 });
+  });
+
+  it('totals each map like summarize does', () => {
+    const [mirage] = mapForm([
+      match({ kills: 30, deaths: 10, damage: 3000, rounds: 30 }),
+      match({ won: false, kills: 10, deaths: 20, damage: 1000, rounds: 20 }),
+      match({ map: 'Inferno', kills: 5, deaths: 25 })
+    ]);
+    expect(mirage).toEqual({ map: 'Mirage', matches: 2, wins: 1, winRate: 50, kd: 40 / 30, adr: 4000 / 50 });
   });
 });
 

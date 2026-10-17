@@ -1,4 +1,13 @@
-import type { GameLine, GroupGame, GroupLineup, PairRecord, PlayerMatch, Summary, TogetherMap } from './types';
+import type {
+  GameLine,
+  GroupGame,
+  GroupLineup,
+  MapForm,
+  PairRecord,
+  PlayerMatch,
+  Summary,
+  TogetherMap
+} from './types';
 
 /** A parsed FACEIT match-stats row with the fields only the server needs. */
 export interface HistoryMatch extends PlayerMatch {
@@ -75,7 +84,24 @@ export function summarize(matches: HistoryMatch[]): Summary | null {
   };
 }
 
-export const countSince = (matches: PlayerMatch[], since: number) =>
+/** Per-map records over `matches`, totalled the same way as `summarize`, most played first. */
+export function mapForm(matches: HistoryMatch[]): MapForm[] {
+  const byMap = new Map<string, HistoryMatch[]>();
+  for (const match of matches) {
+    const played = byMap.get(match.map) ?? [];
+    played.push(match);
+    byMap.set(match.map, played);
+  }
+
+  return [...byMap]
+    .map(([map, played]) => {
+      const { matches, wins, winRate, kd, adr } = summarize(played)!;
+      return { map, matches, wins, winRate, kd, adr };
+    })
+    .sort((a, b) => b.matches - a.matches || a.map.localeCompare(b.map));
+}
+
+export const countSince =(matches: PlayerMatch[], since: number) =>
   matches.filter((match) => match.finishedAt >= since).length;
 
 /** Two players were teammates when FACEIT lists them under the same team in the same match. */
