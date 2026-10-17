@@ -5,7 +5,7 @@ const IDLE_MS = 60_000;
 
 /** Keeps the live overview fresh while the tab is visible: every 20s during a match, else every 60s. */
 export class LivePoll {
-  overview = $state<LiveOverview | null>(null);
+  overview = $state.raw<LiveOverview | null>(null);
   failed = $state(false);
   #timer: ReturnType<typeof setTimeout> | undefined;
   #inFlight = false;

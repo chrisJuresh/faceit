@@ -375,14 +375,18 @@ export async function buildLiveOverview(): Promise<LiveOverview> {
   };
 }
 
-/** The full board for one match, without each player's lifetime record. */
-export async function buildMatchBoard(matchId: string): Promise<LiveMatch> {
+/**
+ * The full board for one of the group's matches, without each player's lifetime record.
+ * Returns null for matches nobody in the group played, so the endpoint can't be used to spend
+ * the API key's rate limit on arbitrary matches.
+ */
+export async function buildMatchBoard(matchId: string): Promise<LiveMatch | null> {
   const owner = await getPlayerByNickname(OWNER_NICKNAME);
+  const friendIds = new Set(owner.friends_ids || []);
   const [match, aliases] = await Promise.all([getMatch(matchId), readAliases()]);
-  return enrichMatch(
-    match,
-    { ownerId: owner.player_id, friendIds: new Set(owner.friends_ids || []), aliases },
-    'lookup',
-    false
+  const involved = Object.values(match.teams || {}).some((team) =>
+    team.roster.some((player) => player.player_id === owner.player_id || friendIds.has(player.player_id))
   );
+  if (!involved) return null;
+  return enrichMatch(match, { ownerId: owner.player_id, friendIds, aliases }, 'lookup', false);
 }

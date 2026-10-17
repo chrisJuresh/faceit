@@ -7,13 +7,15 @@ export const GET: RequestHandler = async ({ params }) => {
   const matchId = extractMatchId(params.id);
   if (!matchId || matchId !== params.id.toLowerCase()) error(400, 'Invalid match id.');
 
+  let board;
   try {
-    return json(await buildMatchBoard(matchId), {
-      headers: { 'cache-control': 'private, max-age=60' }
-    });
+    board = await buildMatchBoard(matchId);
   } catch (cause) {
     if (cause instanceof FaceitApiError && cause.status === 404) error(404, 'Match not found.');
     console.error('Match board failed', cause);
     error(502, 'FACEIT data is unavailable.');
   }
+
+  if (!board) error(404, 'Match not found.');
+  return json(board, { headers: { 'cache-control': 'private, max-age=60' } });
 };

@@ -13,14 +13,15 @@
   const PAGE = 10;
   let limit = $state(PAGE);
   let openKey = $state<string | null>(null);
-  let boards = $state<Record<string, LiveMatch | 'loading' | 'error'>>({});
+  let boards = $state.raw<Record<string, LiveMatch | 'loading' | 'error'>>({});
 
   const shown = $derived(games.slice(0, limit));
   const name = (id: string) => players.get(id)?.displayName ?? 'Unknown';
 
   async function toggle(game: GroupGame) {
     openKey = openKey === game.key ? null : game.key;
-    if (openKey !== game.key || boards[game.matchId] instanceof Object) return;
+    const current = boards[game.matchId];
+    if (openKey !== game.key || (current !== undefined && current !== 'error')) return;
     boards = { ...boards, [game.matchId]: 'loading' };
     try {
       const board = await loadBoard(game.matchId);
