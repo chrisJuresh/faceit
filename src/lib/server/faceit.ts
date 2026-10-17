@@ -38,6 +38,9 @@ export interface FaceitPlayer {
   faceit_url?: string;
   verified?: boolean;
   friends_ids?: string[];
+  steam_id_64?: string;
+  steam_nickname?: string;
+  activated_at?: string;
   games?: Record<
     string,
     {
@@ -46,6 +49,15 @@ export interface FaceitPlayer {
       region?: string;
     }
   >;
+}
+
+/** One item from /players/{id}/games/cs2/stats. Values are strings except timestamps. */
+export interface FaceitGameStatsItem {
+  stats: Record<string, string | number | null>;
+}
+
+export interface FaceitRanking {
+  position?: number;
 }
 
 export interface FaceitStatsPlayer {
@@ -156,10 +168,40 @@ export class FaceitApiError extends Error {
 
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// FACEIT allows 20 requests per second per key; stay just under it so a cold load of the
+// whole friends list queues instead of failing with 429s.
+const REQUESTS_PER_WINDOW = 18;
+const WINDOW_MS = 1000;
+const recentStarts: number[] = [];
+let gate: Promise<void> = Promise.resolve();
+
+function throttle() {
+  const turn = gate.then(async () => {
+    for (;;) {
+      const now = Date.now();
+      while (recentStarts.length && now - recentStarts[0] >= WINDOW_MS) recentStarts.shift();
+      if (recentStarts.length < REQUESTS_PER_WINDOW) {
+        recentStarts.push(now);
+        return;
+      }
+      await pause(WINDOW_MS - (now - recentStarts[0]) + 5);
+    }
+  });
+  gate = turn;
+  return turn;
+}
+
+function retryDelay(response: Response, attempt: number) {
+  const header = response.headers.get('retry-after') ?? response.headers.get('ratelimit-reset');
+  const seconds = header === null ? Number.NaN : Number(header);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 600 * 2 ** attempt;
+}
+
 async function request<T>(endpoint: string, attempt = 0): Promise<T> {
   const apiKey = env.API_KEY?.trim();
   if (!apiKey) throw new FaceitApiError('FACEIT API key is not configured.', 500, endpoint);
 
+  await throttle();
   const response = await fetch(`${BASE_URL}${endpoint}`, {
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -167,9 +209,8 @@ async function request<T>(endpoint: string, attempt = 0): Promise<T> {
     }
   });
 
-  if ((response.status === 429 || response.status >= 500) && attempt < 2) {
-    const retryAfter = Number(response.headers.get('retry-after'));
-    await pause(Number.isFinite(retryAfter) ? retryAfter * 1000 : 500 * 2 ** attempt);
+  if ((response.status === 429 || response.status >= 500) && attempt < 3) {
+    await pause(retryDelay(response, attempt));
     return request<T>(endpoint, attempt + 1);
   }
 
@@ -187,25 +228,24 @@ async function request<T>(endpoint: string, attempt = 0): Promise<T> {
   return (await response.json()) as T;
 }
 
+const MINUTE = 60_000;
+
 export function getPlayerByNickname(nickname: string) {
   const endpoint = `/players?nickname=${encodeURIComponent(nickname)}&game=cs2`;
-  return cached(`player:nickname:${nickname.toLowerCase()}`, 5 * 60_000, () =>
-    request<FaceitPlayer>(endpoint)
+  return cached(
+    `player:nickname:${nickname.toLowerCase()}`,
+    5 * MINUTE,
+    () => request<FaceitPlayer>(endpoint),
+    55 * MINUTE
   );
 }
 
 export function getPlayer(playerId: string) {
-  return cached(`player:id:${playerId}`, 5 * 60_000, () =>
-    request<FaceitPlayer>(`/players/${encodeURIComponent(playerId)}`)
-  );
-}
-
-export function getPlayerHistory(playerId: string, limit: number) {
-  const boundedLimit = Math.max(1, Math.min(100, Math.round(limit)));
-  return cached(`history:${playerId}:${boundedLimit}`, 60_000, () =>
-    request<{ items: FaceitHistoryMatch[]; start: number; end: number }>(
-      `/players/${encodeURIComponent(playerId)}/history?game=cs2&offset=0&limit=${boundedLimit}`
-    )
+  return cached(
+    `player:id:${playerId}`,
+    5 * MINUTE,
+    () => request<FaceitPlayer>(`/players/${encodeURIComponent(playerId)}`),
+    55 * MINUTE
   );
 }
 
@@ -224,13 +264,45 @@ export function getMatch(matchId: string) {
 }
 
 export function getLifetimeStats(playerId: string) {
-  return cached(`lifetime:${playerId}`, 10 * 60_000, () =>
-    request<FaceitLifetimeStats>(`/players/${encodeURIComponent(playerId)}/stats/cs2`)
+  return cached(
+    `lifetime:${playerId}`,
+    10 * MINUTE,
+    () => request<FaceitLifetimeStats>(`/players/${encodeURIComponent(playerId)}/stats/cs2`),
+    50 * MINUTE
+  );
+}
+
+/** A player's per-match stats, newest first, one page of up to 100. */
+export function getPlayerGameStats(playerId: string, offset: number, limit: number) {
+  const boundedLimit = Math.max(1, Math.min(100, Math.round(limit)));
+  return cached(
+    `game-stats:${playerId}:${offset}:${boundedLimit}`,
+    2 * MINUTE,
+    () =>
+      request<{ items: FaceitGameStatsItem[] }>(
+        `/players/${encodeURIComponent(playerId)}/games/cs2/stats?offset=${offset}&limit=${boundedLimit}`
+      ),
+    28 * MINUTE
+  );
+}
+
+/** A player's position in FACEIT's regional (or national) ladder; 0 when unranked. */
+export function getRanking(region: string, playerId: string, country?: string) {
+  const countryParam = country ? `&country=${encodeURIComponent(country.toLowerCase())}` : '';
+  return cached(
+    `rank:${region}:${country || '*'}:${playerId}`,
+    15 * MINUTE,
+    () =>
+      request<FaceitRanking>(
+        `/rankings/games/cs2/regions/${encodeURIComponent(region)}/players/${encodeURIComponent(playerId)}?limit=1${countryParam}`
+      ),
+    45 * MINUTE
   );
 }
 
 export function getMatchStats(matchId: string) {
-  return cached(`match-stats:${matchId}`, 30 * 60_000, () =>
+  // Only requested for finished matches, whose stats no longer change.
+  return cached(`match-stats:${matchId}`, 6 * 60 * MINUTE, () =>
     request<FaceitMatchStats>(`/matches/${encodeURIComponent(matchId)}/stats`)
   );
 }

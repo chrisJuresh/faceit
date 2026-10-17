@@ -8,12 +8,17 @@ import type {
   LivePlayer,
   LiveScoreline,
   LiveSource,
-  LiveTeam,
-  SquadMemberStatus
+  LiveTeam
 } from '$lib/types';
 import { readAliases } from './aliases';
-import { estimatedSwing, round, statNumber } from './analytics';
-import { displayMap, normalizeFaceitUrl } from './dashboard';
+import {
+  displayMap,
+  normalizeFaceitUrl,
+  optionalStat,
+  round,
+  safeImage,
+  statNumber
+} from './analytics';
 import {
   getLifetimeStats,
   getMatch,
@@ -60,10 +65,6 @@ export function matchPhase(status: string | undefined): LivePhase {
   return 'setup';
 }
 
-// Image URLs end up inside an inline CSS url(), so only accept plain https URLs.
-const safeImage = (value: string | undefined) =>
-  value && /^https:\/\/[^\s'"()\\]+$/.test(value) ? value : '';
-
 const normalizeMapKey = (value: string) =>
   value
     .toLowerCase()
@@ -108,7 +109,10 @@ function mapRecordFor(stats: FaceitLifetimeStats | undefined, map: string | null
   if (!stats?.segments || !map) return null;
   const key = normalizeMapKey(map);
   const segment = stats.segments.find(
-    (entry) => (entry.type || 'Map') === 'Map' && normalizeMapKey(entry.label) === key
+    (entry) =>
+      (entry.type || 'Map') === 'Map' &&
+      (entry.mode || '5v5') === '5v5' &&
+      normalizeMapKey(entry.label) === key
   );
   if (!segment) return null;
   const s = segment.stats;
@@ -123,10 +127,7 @@ function mapRecordFor(stats: FaceitLifetimeStats | undefined, map: string | null
   };
 }
 
-function scorelineFor(
-  playerStats: Record<string, string | number | null>,
-  swing: number
-): LiveScoreline {
+function scorelineFor(playerStats: Record<string, string | number | null>): LiveScoreline {
   const kills = statNumber(playerStats, 'Kills');
   const deaths = statNumber(playerStats, 'Deaths');
   return {
@@ -148,15 +149,9 @@ function scorelineFor(
     pentaKills: statNumber(playerStats, 'Penta Kills'),
     utilityDamage: statNumber(playerStats, 'Utility Damage'),
     enemiesFlashed: statNumber(playerStats, 'Enemies Flashed'),
-    sniperKills: statNumber(playerStats, 'Sniper Kills'),
-    swing
+    sniperKills: statNumber(playerStats, 'Sniper Kills')
   };
 }
-
-const optionalNumber = (stats: Record<string, string | number | null> | undefined, key: string) =>
-  stats && stats[key] !== undefined && stats[key] !== null && stats[key] !== ''
-    ? statNumber(stats, key)
-    : null;
 
 export function buildLiveMatch(match: FaceitMatch, context: MatchContext): LiveMatch {
   const phase = matchPhase(match.status);
@@ -205,13 +200,7 @@ export function buildLiveMatch(match: FaceitMatch, context: MatchContext): LiveM
         isLeader: team.leader === rosterPlayer.player_id,
         lifetime: lifetimeFor(lifetime),
         onMap: mapRecordFor(lifetime, mapKey ?? null),
-        scoreline:
-          statsPlayer && statsTeam
-            ? scorelineFor(
-                statsPlayer.player_stats,
-                estimatedSwing(statsPlayer, statsTeam, rounds || 1)
-              )
-            : null,
+        scoreline: statsPlayer ? scorelineFor(statsPlayer.player_stats) : null,
         allStats: statsPlayer
           ? Object.entries(statsPlayer.player_stats)
               .filter(([, value]) => value !== null && value !== '')
@@ -234,7 +223,7 @@ export function buildLiveMatch(match: FaceitMatch, context: MatchContext): LiveM
     const score =
       match.results?.score?.[faction] ??
       match.detailed_results?.[0]?.factions?.[faction]?.score ??
-      optionalNumber(teamStats, 'Final Score');
+      optionalStat(teamStats, 'Final Score');
 
     return {
       factionId: team.faction_id,
@@ -243,15 +232,13 @@ export function buildLiveMatch(match: FaceitMatch, context: MatchContext): LiveM
       avatar: team.avatar || '',
       winProbability:
         typeof team.stats?.winProbability === 'number' ? round(team.stats.winProbability * 100) : null,
-      averageLevel: round(team.stats?.skillLevel?.average || 0, 1),
       averageElo: withElo.length
         ? Math.round(withElo.reduce((sum, player) => sum + player.elo, 0) / withElo.length)
         : 0,
-      rating: team.stats?.rating || 0,
       score: typeof score === 'number' && Number.isFinite(score) ? score : null,
-      firstHalf: optionalNumber(teamStats, 'First Half Score'),
-      secondHalf: optionalNumber(teamStats, 'Second Half Score'),
-      overtime: optionalNumber(teamStats, 'Overtime score'),
+      firstHalf: optionalStat(teamStats, 'First Half Score'),
+      secondHalf: optionalStat(teamStats, 'Second Half Score'),
+      overtime: optionalStat(teamStats, 'Overtime score'),
       won: phase === 'finished' && match.results?.winner === faction,
       tracked: players.some((player) => player.isOwner || player.isFriend),
       players
@@ -276,7 +263,7 @@ export function buildLiveMatch(match: FaceitMatch, context: MatchContext): LiveM
     finishedAt: match.finished_at || null,
     rounds,
     faceitUrl: normalizeFaceitUrl(match.faceit_url, `https://www.faceit.com/en/cs2/room/${match.match_id}`),
-    demoAvailable: Boolean(match.demo_url?.length),
+    demoUrl: safeImage(match.demo_url?.[0]),
     trackedPlayerIds,
     teams
   };
@@ -287,7 +274,8 @@ const PHASE_ORDER: Record<LivePhase, number> = { live: 0, setup: 1, finished: 2,
 async function enrichMatch(
   match: FaceitMatch,
   context: Omit<MatchContext, 'profiles' | 'lifetimes' | 'stats' | 'source'>,
-  source: LiveSource
+  source: LiveSource,
+  withLifetimes = true
 ) {
   const playerIds = Object.values(match.teams || {}).flatMap((team) =>
     team.roster.map((player) => player.player_id)
@@ -296,7 +284,9 @@ async function enrichMatch(
 
   const [profiles, lifetimes, stats] = await Promise.all([
     mapWithConcurrency(playerIds, 5, (id) => getPlayer(id).catch(() => null)),
-    mapWithConcurrency(playerIds, 5, (id) => getLifetimeStats(id).catch(() => null)),
+    withLifetimes
+      ? mapWithConcurrency(playerIds, 5, (id) => getLifetimeStats(id).catch(() => null))
+      : Promise.resolve(playerIds.map(() => null)),
     phase === 'finished' ? getMatchStats(match.match_id).catch(() => null) : Promise.resolve(null)
   ]);
 
@@ -318,13 +308,19 @@ async function enrichMatch(
 export async function buildLiveOverview(): Promise<LiveOverview> {
   const owner = await getPlayerByNickname(OWNER_NICKNAME);
   const friendIds = new Set(owner.friends_ids || []);
-  const trackedIds = [...new Set([owner.player_id, ...friendIds])];
+  // Friends without a CS2 profile can't be in a CS2 match, so don't poll their history.
+  const friendProfiles = await mapWithConcurrency([...friendIds], 6, (id) =>
+    getPlayer(id).catch(() => null)
+  );
+  const cs2Friends = [...friendIds].filter(
+    (_, index) => friendProfiles[index] === null || Boolean(friendProfiles[index]?.games?.cs2)
+  );
+  const trackedIds = [...new Set([owner.player_id, ...cs2Friends])];
   const now = Math.floor(Date.now() / 1000);
   const windowStart = now - RECENT_WINDOW_MINUTES * 60;
 
-  const [histories, profiles, aliases] = await Promise.all([
+  const [histories, aliases] = await Promise.all([
     mapWithConcurrency(trackedIds, 6, (id) => getRecentHistory(id, 2).catch(() => null)),
-    mapWithConcurrency(trackedIds, 6, (id) => getPlayer(id).catch(() => null)),
     readAliases()
   ]);
 
@@ -371,65 +367,22 @@ export async function buildLiveOverview(): Promise<LiveOverview> {
     enrichMatch(match, context, candidates.get(match.match_id) || 'history')
   );
 
-  const activeByPlayer = new Map<string, string>();
-  for (const match of matches) {
-    if (match.phase !== 'live' && match.phase !== 'setup') continue;
-    for (const id of match.trackedPlayerIds) activeByPlayer.set(id, match.matchId);
-  }
-
-  const squad: SquadMemberStatus[] = trackedIds.map((playerId, index) => {
-    const profile = profiles[index];
-    const lastItem = histories[index]?.items?.[0];
-    const rosterEntry = lastItem
-      ? Object.values(lastItem.teams)
-          .flatMap((team) => team.players)
-          .find((player) => player.player_id === playerId)
-      : undefined;
-    const nickname = profile?.nickname || rosterEntry?.nickname || 'Unknown player';
-    return {
-      playerId,
-      nickname,
-      displayName: aliases[playerId] || nickname,
-      avatar: profile?.avatar || rosterEntry?.avatar || '',
-      skillLevel: profile?.games?.cs2?.skill_level || rosterEntry?.skill_level || 0,
-      elo: profile?.games?.cs2?.faceit_elo || 0,
-      isOwner: playerId === owner.player_id,
-      lastMatchAt: lastItem?.finished_at || null,
-      activeMatchId: activeByPlayer.get(playerId) || null
-    };
-  });
-
-  squad.sort(
-    (a, b) =>
-      Number(Boolean(b.activeMatchId)) - Number(Boolean(a.activeMatchId)) ||
-      Number(b.isOwner) - Number(a.isOwner) ||
-      (b.lastMatchAt || 0) - (a.lastMatchAt || 0)
-  );
-
   return {
-    owner: {
-      playerId: owner.player_id,
-      nickname: owner.nickname,
-      avatar: owner.avatar || '',
-      faceitUrl: normalizeFaceitUrl(
-        owner.faceit_url,
-        `https://www.faceit.com/en/players/${encodeURIComponent(owner.nickname)}`
-      )
-    },
     generatedAt: now,
     recentWindowMinutes: RECENT_WINDOW_MINUTES,
     webhookEnabled: Boolean(env.FACEIT_WEBHOOK_SECRET?.trim()),
-    matches,
-    squad
+    matches
   };
 }
 
-export async function buildLookupMatch(matchId: string): Promise<LiveMatch> {
+/** The full board for one match, without each player's lifetime record. */
+export async function buildMatchBoard(matchId: string): Promise<LiveMatch> {
   const owner = await getPlayerByNickname(OWNER_NICKNAME);
   const [match, aliases] = await Promise.all([getMatch(matchId), readAliases()]);
   return enrichMatch(
     match,
     { ownerId: owner.player_id, friendIds: new Set(owner.friends_ids || []), aliases },
-    'lookup'
+    'lookup',
+    false
   );
 }
