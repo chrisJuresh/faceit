@@ -140,12 +140,12 @@
   {/if}
 {:else if rows.length}
   <div class="scroll bleed">
-    <table class="activity">
+    <table class="activity" class:years={view === 'years'}>
       <thead>
         <tr>
           <th class="stick"><span class="sr-only">Player</span></th>
           {#each table.columns as column (column.start)}
-            <th class="period" scope="col">
+            <th scope="col">
               {#if column.label}
                 <span class="week" aria-hidden="true">{column.label}</span>
               {/if}
@@ -153,7 +153,6 @@
             </th>
           {/each}
           <th class="total" scope="col">Total</th>
-          <td class="fill" aria-hidden="true"></td>
         </tr>
       </thead>
       <tbody>
@@ -166,21 +165,21 @@
               {@const tone = count ? step(count) : null}
               {@const unread = count === null}
               <td
+                class="period"
                 class:unread
-                style:background={tone ? `color-mix(in srgb, var(--accent) ${tone.mix}%, var(--cell))` : undefined}
+                style:--tone={tone ? `color-mix(in srgb, var(--accent) ${tone.mix}%, var(--cell))` : undefined}
                 style:color={tone?.text}
                 {...readout(() => [
                   `${row.player.displayName} · ${table.columns[index].name}`,
                   plural(count)
                 ])}
               >
-                <span aria-hidden="true">{unread ? '?' : count || ''}</span><span class="sr-only">{plural(count)}</span>
+                <span class="block" aria-hidden="true">{unread ? '?' : count || ''}</span><span class="sr-only">{plural(count)}</span>
               </td>
             {/each}
             <td class="total" class:zero={!row.total} title={row.partial ? 'At least: some periods not read' : undefined}>
               {#if row.unread}—{:else}{row.total}{#if row.partial}+{/if}{/if}
             </td>
-            <td class="fill" aria-hidden="true"></td>
           </tr>
         {/each}
       </tbody>
@@ -196,24 +195,12 @@
     margin: 0 -2px;
   }
 
-  /*
-   * Fills its column: the periods share the width up to 44px each, the name and total columns stay
-   * narrow, and the trailing fill column takes whatever is left so a few years don't stretch wide.
-   */
+  /* Fills its column: the periods share the width, the name and total columns stay narrow. */
   .activity {
     border-collapse: separate;
     border-spacing: 2px;
     white-space: nowrap;
     width: 100%;
-  }
-
-  .period {
-    width: 44px;
-  }
-
-  .fill {
-    background: none;
-    min-width: 0;
   }
 
   th {
@@ -255,7 +242,7 @@
   }
 
   td {
-    background: var(--cell);
+    background: var(--tone, var(--cell));
     border-radius: 2px;
     font: 10.5px var(--mono);
     height: 26px;
@@ -268,6 +255,36 @@
     background: none;
     box-shadow: inset 0 0 0 1px var(--rule);
     color: var(--muted);
+  }
+
+  /*
+   * Only a few years, so their columns run wide. The column still stretches, but the coloured
+   * block stays 48px and centred, leaving gaps between the years.
+   */
+  .years td.period {
+    background: none;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  .years .block {
+    background: var(--tone, var(--cell));
+    border-radius: 2px;
+    display: block;
+    height: 26px;
+    line-height: 26px;
+    margin: 0 auto;
+    max-width: 48px;
+  }
+
+  .years td.unread .block {
+    background: none;
+    box-shadow: inset 0 0 0 1px var(--rule);
+  }
+
+  .years .week {
+    left: 50%;
+    transform: translateX(-50%);
   }
 
   .total {
