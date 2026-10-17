@@ -198,7 +198,10 @@ export function weekStart(timestamp: number) {
   return day - weekday * DAY;
 }
 
-/** Matches played per player per week over the last `weeks` weeks, oldest week first. */
+/**
+ * Matches played per player over the last `weeks` weeks: per week, oldest week first, and per
+ * weekday (UTC), Monday first.
+ */
 export function weeklyActivity(players: PlayerMatches[], weeks: number, now: number) {
   const current = weekStart(now);
   const weekStarts = Array.from({ length: weeks }, (_, index) => current - (weeks - 1 - index) * 7 * DAY);
@@ -206,12 +209,14 @@ export function weeklyActivity(players: PlayerMatches[], weeks: number, now: num
 
   const rows = players.map((player) => {
     const counts = weekStarts.map(() => 0);
+    const weekdays = Array.from({ length: 7 }, () => 0);
     for (const match of player.matches) {
       if (match.finishedAt < first) continue;
       const index = Math.min(weeks - 1, Math.floor((match.finishedAt - first) / (7 * DAY)));
       counts[index] += 1;
+      weekdays[Math.floor((match.finishedAt - first) / DAY) % 7] += 1;
     }
-    return { playerId: player.playerId, counts };
+    return { playerId: player.playerId, counts, weekdays };
   });
 
   return { weekStarts, rows };

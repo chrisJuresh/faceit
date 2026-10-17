@@ -197,10 +197,6 @@
         <EloLadder players={shown} />
       </section>
       <section id="activity" aria-labelledby="activity-head">
-        <div class="section-head">
-          <h2 id="activity-head">Activity</h2>
-          <span class="meta">Matches per week</span>
-        </div>
         <Activity activity={squad.activity} players={shown} />
       </section>
     </div>

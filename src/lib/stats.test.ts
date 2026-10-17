@@ -199,4 +199,17 @@ describe('weekly activity', () => {
     expect(weekStarts).toHaveLength(3);
     expect(rows[0].counts).toEqual([0, 1, 1]);
   });
+
+  it('counts matches per weekday, Monday first', () => {
+    const now = Date.UTC(2026, 9, 17, 15) / 1000;
+    const monday = weekStart(now);
+    const tuesday = monday + DAY + 3600;
+    const lastSunday = monday - DAY + 23 * 3600;
+    const { rows } = weeklyActivity(
+      [{ playerId: 'a', matches: [match({ finishedAt: tuesday }), match({ finishedAt: tuesday - 7 * DAY }), match({ finishedAt: lastSunday })] }],
+      3,
+      now
+    );
+    expect(rows[0].weekdays).toEqual([0, 2, 0, 0, 0, 0, 1]);
+  });
 });
