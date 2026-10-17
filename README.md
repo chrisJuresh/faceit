@@ -65,14 +65,14 @@ Configure these server-side environment values:
 | `APP_ID` | No | FACEIT application identifier, retained for deployment metadata. |
 | `API_KEY_NAME` | No | FACEIT key label, retained for deployment metadata. |
 | `FACEIT_OWNER_NICKNAME` | No | Owner account. Defaults to `Christian976`. |
-| `OWNER_ACCESS_TOKEN` | For aliases | Secret entered through “Owner access” to unlock rename controls. |
+| `OWNER_ACCESS_TOKEN` | For aliases | Secret entered through “Edit names” to unlock rename controls. |
 | `SESSION_SECRET` | For aliases | Long random value used to sign the owner session. |
 | `DATA_DIR` | No | Alias storage directory. Defaults to `./data`. |
 | `FACEIT_WEBHOOK_SECRET` | No | Enables the FACEIT webhook receiver used by `/live`. |
 | `FACEIT_WEBHOOK_HEADER` | No | Header carrying the webhook secret. Defaults to `x-webhook-secret`. |
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | On Vercel | Upstash Redis REST credentials for webhook state and aliases. `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` also work. |
 
-The local `.env` in this workspace already has generated `OWNER_ACCESS_TOKEN` and `SESSION_SECRET` values. They are deliberately ignored by Git. To rename a player, open **Owner access** in the footer and paste the `OWNER_ACCESS_TOKEN` value from your deployed environment.
+The local `.env` in this workspace already has generated `OWNER_ACCESS_TOKEN` and `SESSION_SECRET` values. They are deliberately ignored by Git. To rename a player, choose **Edit names** in the footer, paste the `OWNER_ACCESS_TOKEN` value from your deployed environment, then open the player's row and set a display name.
 
 ## Production
 
