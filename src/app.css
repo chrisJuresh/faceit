@@ -1,51 +1,711 @@
-:root {
-  --accent: #ff5c35;
-  --accent-soft: rgba(255, 92, 53, 0.12);
-  --accent-border: rgba(255, 92, 53, 0.32);
-  --background: #0b0b0c;
-  --background-soft: #101011;
-  --surface: #141415;
-  --surface-raised: #1a1a1c;
-  --surface-quiet: #101012;
-  --border: #272729;
-  --border-strong: #353537;
-  --border-subtle: #202022;
-  --text: #d8d5cf;
-  --text-strong: #f5f2ec;
-  --text-muted: #87847e;
-  --positive: #7bd9a5;
-  --positive-soft: rgba(123, 217, 165, 0.12);
-  --negative: #ff7d76;
-  --negative-soft: rgba(255, 125, 118, 0.12);
-  --shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
+/*
+  Stackline. One system throughout: Chivo for text, Chivo Mono for every number, Archivo (wide)
+  for the wordmark only. Structure comes from hairline rules and alignment; surfaces are flat
+  and neutral, with one tinted band for Live. Dark is the default.
+
+  Text colours meet 4.5:1 on page, band, hover and empty-cell surfaces in both themes. Every
+  win/loss mark also differs in position or carries a W/L letter, so none relies on colour alone.
+*/
+:root,
+:root[data-theme='dark'] {
+  --page: #121214;
+  --band: #18181b;
+  --hover: #1f1f23;
+  --cell: #1e1e22;
+  --rule: #2a2a2e;
+  --rule-2: #3d3d42;
+  /* Marks and disabled controls only, never text. */
+  --faint: #55555b;
+  --ink: #ebe9e3;
+  --ink-2: #b2b0aa;
+  --muted: #8a8984;
+  --accent: #92adf6;
+  --on-accent: #121214;
+  --sorted: rgb(255 255 255 / 0.035);
+  --win: #2aa37c;
+  --loss: #e25d3e;
+  --win-text: #2aa37c;
+  --loss-text: #e8694b;
+  /* FACEIT's level colours. */
+  --level-1: #eeeeee;
+  --level-2: #1ce400;
+  --level-4: #ffc800;
+  --level-8: #ff6309;
+  --level-10: #fe1f00;
   color-scheme: dark;
-  font-family: Inter, "Segoe UI", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  font-synthesis: none;
 }
 
 :root[data-theme='light'] {
-  --background: #f2f0ea;
-  --background-soft: #ebe9e3;
-  --surface: #faf9f5;
-  --surface-raised: #ffffff;
-  --surface-quiet: #f0eee8;
-  --border: #d9d6cf;
-  --border-strong: #c7c3ba;
-  --border-subtle: #e3e0d9;
-  --text: #4f4c47;
-  --text-strong: #171715;
-  --text-muted: #77736c;
-  --positive: #16774b;
-  --positive-soft: rgba(22, 119, 75, 0.1);
-  --negative: #c13f38;
-  --negative-soft: rgba(193, 63, 56, 0.1);
-  --shadow: 0 24px 70px rgba(34, 31, 25, 0.13);
+  --page: #f7f6f2;
+  --band: #f0eee8;
+  --hover: #e9e6de;
+  --cell: #ebe8e1;
+  --rule: #dedbd3;
+  --rule-2: #c3bfb5;
+  --faint: #b5b1a7;
+  --ink: #17171a;
+  --ink-2: #4a4a50;
+  --muted: #67665f;
+  --accent: #1f4fbf;
+  --on-accent: #ffffff;
+  --sorted: rgb(0 0 0 / 0.03);
+  --win: #108a6c;
+  --loss: #d24a33;
+  --win-text: #0d7259;
+  --loss-text: #b33823;
+  /* The same hues, darkened enough to show on paper. */
+  --level-1: #9c9c9c;
+  --level-2: #17a800;
+  --level-4: #d9a000;
+  --level-8: #ec5a00;
+  --level-10: #e01b00;
   color-scheme: light;
 }
 
-* { box-sizing: border-box; }
-html { background: var(--background); scroll-behavior: smooth; }
-body { background: var(--background); color: var(--text); margin: 0; min-width: 320px; }
-button, input, select { font: inherit; }
-button, a { -webkit-tap-highlight-color: transparent; }
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+:root {
+  --sans: 'Chivo Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'Chivo Mono Variable', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --wordmark: 'Archivo Variable', var(--sans);
+  --gutter: 32px;
+  --max: 1320px;
+  /* The background a table cell sits on; bands and open rows override it. */
+  --surface: var(--page);
+}
+
+@media (max-width: 640px) {
+  :root {
+    --gutter: 16px;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--page);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--page);
+  color: var(--ink);
+  font: 400 13px/1.45 var(--sans);
+  margin: 0;
+  min-width: 320px;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+  color: inherit;
+  font: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+img {
+  display: block;
+}
+
+:focus-visible {
+  outline: 1.5px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.wrap {
+  margin: 0 auto;
+  max-width: var(--max);
+  padding: 0 var(--gutter);
+}
+
+.sr-only {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.none {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.pos {
+  color: var(--win-text);
+}
+
+.neg {
+  color: var(--loss-text);
+}
+
+/* W / L letters. */
+.res {
+  font: 600 12px var(--mono);
+}
+
+.res.win {
+  color: var(--win-text);
+}
+
+.res.loss {
+  color: var(--loss-text);
+}
+
+/* ---------- Sections ---------- */
+
+.section {
+  margin-top: 64px;
+}
+
+.section-head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-bottom: 16px;
+}
+
+.section-head h2 {
+  font: 600 20px/28px var(--sans);
+  letter-spacing: -0.01em;
+}
+
+.section-head .controls {
+  align-items: center;
+  align-self: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-left: auto;
+}
+
+.sub-head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-bottom: 10px;
+}
+
+.sub-head h3 {
+  font: 600 15px/22px var(--sans);
+}
+
+.sub-head .controls {
+  margin-left: auto;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.meta b {
+  color: var(--ink-2);
+  font: 500 12px var(--mono);
+}
+
+@media (max-width: 640px) {
+  .section {
+    margin-top: 48px;
+  }
+
+  .section-head .controls {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .section-head .divider {
+    display: none;
+  }
+}
+
+/* ---------- Controls ---------- */
+
+/* Text options; the chosen one is underlined in the accent. */
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.seg button {
+  background: none;
+  border: 0;
+  border-bottom: 1.5px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 7px 4px;
+  white-space: nowrap;
+}
+
+.seg button:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.seg button[aria-pressed='true'] {
+  border-bottom-color: var(--accent);
+  color: var(--ink);
+}
+
+.seg button:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.seg .count {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-weight: 400;
+  margin-left: 4px;
+}
+
+.divider {
+  align-self: center;
+  background: var(--rule-2);
+  height: 14px;
+  width: 1px;
+}
+
+.text-button {
+  background: none;
+  border: 0;
+  color: var(--ink-2);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 0;
+  text-decoration: underline;
+  text-decoration-color: var(--rule-2);
+  text-underline-offset: 3px;
+}
+
+.text-button:hover:not(:disabled) {
+  color: var(--ink);
+  text-decoration-color: currentColor;
+}
+
+.text-button:disabled {
+  cursor: default;
+}
+
+.more {
+  margin-top: 10px;
+}
+
+/* Outbound links: quiet text with an arrow. */
+.ext {
+  color: var(--ink-2);
+  font-size: 12.5px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ext:hover {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---------- Tables ---------- */
+
+/* A query container, so detail panels inside can match its visible width. */
+.scroll {
+  container-type: inline-size;
+  overflow-x: auto;
+  scrollbar-color: var(--rule-2) transparent;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+/*
+  Numbers right-aligned in Chivo Mono, hairline row rules, a heavier rule under the column
+  heads. Optional group row above. .l marks text cells; .gs starts a column group; .stick keeps
+  the first column in view while the table scrolls sideways.
+*/
+.tbl {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12.5px;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.tbl th,
+.tbl td {
+  background-color: var(--surface);
+  font-weight: 400;
+  height: 32px;
+  padding: 0 7px;
+  text-align: right;
+  vertical-align: middle;
+}
+
+.tbl td {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tbl thead th {
+  color: var(--muted);
+  font: 500 11.5px/1.2 var(--sans);
+  height: 24px;
+}
+
+.tbl thead tr.groups th {
+  height: 22px;
+  position: relative;
+  text-align: left;
+}
+
+.tbl thead tr.groups th.group::after {
+  background: var(--rule);
+  bottom: 0;
+  content: '';
+  height: 1px;
+  left: 20px;
+  position: absolute;
+  right: 7px;
+}
+
+.tbl thead tr.cols th {
+  border-bottom: 1px solid var(--rule-2);
+  color: var(--ink-2);
+  padding-top: 4px;
+  vertical-align: bottom;
+}
+
+.tbl tbody td,
+.tbl tbody th {
+  border-bottom: 1px solid var(--rule);
+}
+
+.tbl .l {
+  font-family: var(--sans);
+  text-align: left;
+}
+
+.tbl .gs {
+  padding-left: 20px;
+}
+
+.tbl .stick {
+  left: 0;
+  position: sticky;
+  z-index: 1;
+}
+
+.tbl td.sorted {
+  background-image: linear-gradient(var(--sorted), var(--sorted));
+}
+
+.tbl tr.low td,
+.tbl td.low {
+  color: var(--muted);
+}
+
+.tbl tr.row {
+  cursor: pointer;
+}
+
+.tbl tr.row:hover > * {
+  background-color: var(--hover);
+}
+
+.tbl tr.open > * {
+  background-color: var(--band);
+}
+
+/* A full-width row under an opened row. */
+.tbl tr.detail > td {
+  --surface: var(--band);
+  background-color: var(--band);
+  border-bottom: 1px solid var(--rule-2);
+  font-family: var(--sans);
+  font-size: 13px;
+  height: auto;
+  padding: 0;
+  text-align: left;
+  white-space: normal;
+}
+
+/* Keeps a detail panel in the visible part of a sideways-scrolling table. */
+.pin {
+  left: 0;
+  position: sticky;
+  width: 100cqw;
+}
+
+/* Column head that sorts. The arrow sits left of the label so labels stay flush right. */
+.sort {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.sort:hover,
+th.sorted .sort {
+  color: var(--ink);
+}
+
+.sort .arrow {
+  color: var(--accent);
+  display: inline-block;
+  font-size: 8px;
+  margin-right: 3px;
+  vertical-align: 1px;
+  width: 8px;
+}
+
+/* Compact table for detail panels and pair lists. */
+.mini {
+  border-collapse: collapse;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.mini th,
+.mini td {
+  height: 26px;
+  padding: 0 6px;
+  text-align: right;
+}
+
+.mini th {
+  border-bottom: 1px solid var(--rule-2);
+  color: var(--muted);
+  font: 500 11px var(--sans);
+}
+
+.mini td {
+  border-bottom: 1px solid var(--rule);
+  font: 12px var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.mini .l {
+  font-family: var(--sans);
+  text-align: left;
+}
+
+.mini td.l {
+  font-size: 12.5px;
+}
+
+.mini th:first-child,
+.mini td:first-child {
+  padding-left: 0;
+}
+
+.mini tr.low td {
+  color: var(--muted);
+}
+
+/* Player name cell: photo, name, country. */
+.who {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tbl th .who {
+  min-width: 150px;
+}
+
+.who .name {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.who .name.other {
+  color: var(--ink-2);
+  font-weight: 400;
+}
+
+.who .cc {
+  color: var(--muted);
+  font: 10.5px var(--mono);
+}
+
+/* Expand/collapse chevron. */
+.chev {
+  color: var(--muted);
+  display: block;
+  flex: none;
+  height: 10px;
+  transition: transform 0.15s;
+  width: 10px;
+}
+
+[aria-expanded='true'] .chev,
+.open .chev {
+  transform: rotate(90deg);
+}
+
+/* Facts list: label left, value right. */
+.kv {
+  display: grid;
+  font-size: 12px;
+  gap: 4px 18px;
+  grid-template-columns: auto 1fr;
+  margin: 0;
+}
+
+.kv dt {
+  color: var(--muted);
+}
+
+.kv dd {
+  font-family: var(--mono);
+  margin: 0;
+  text-align: right;
+}
+
+.kv dd .muted {
+  margin-left: 6px;
+}
+
+/* Every raw stat FACEIT returned for a player in a match. */
+.raw {
+  column-gap: 28px;
+  columns: 4 210px;
+  margin: 0;
+  padding: 12px 16px 18px;
+}
+
+.raw div {
+  border-bottom: 1px solid var(--rule);
+  break-inside: avoid;
+  display: flex;
+  font-size: 11.5px;
+  gap: 12px;
+  justify-content: space-between;
+  line-height: 22px;
+}
+
+.raw dt {
+  color: var(--muted);
+}
+
+.raw dd {
+  font-family: var(--mono);
+  margin: 0;
+}
+
+/* Legends under charts. */
+.legend {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  gap: 4px 14px;
+}
+
+.legend .key {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+}
+
+.legend .swatch {
+  border-radius: 1px;
+  display: inline-block;
+  height: 8px;
+  width: 8px;
+}
+
+.legend .line {
+  background: var(--ink-2);
+  display: inline-block;
+  height: 1px;
+  width: 14px;
+}
+
+.swatch.win {
+  background: var(--win);
+}
+
+.swatch.loss {
+  background: var(--loss);
+}
+
+/* Map thumbnail. */
+.thumb {
+  background: var(--cell);
+  border-radius: 2px;
+  flex: none;
+  height: 19px;
+  object-fit: cover;
+  width: 34px;
+}
+
+/* Hover read-out for charts. */
+.tip {
+  background: var(--ink);
+  border-radius: 2px;
+  color: var(--page);
+  font: 11.5px/1.5 var(--mono);
+  max-width: 280px;
+  padding: 6px 9px;
+  pointer-events: none;
+  position: fixed;
+  white-space: nowrap;
+  z-index: 30;
+}
+
+@media (max-width: 640px) {
+  .tbl .stick {
+    box-shadow: inset -1px 0 var(--rule);
+  }
+
+  .tbl th .who {
+    min-width: 0;
+  }
+
+  .tbl .who .cc {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chev {
+    transition: none;
+  }
+}

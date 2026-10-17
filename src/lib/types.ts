@@ -1,30 +1,119 @@
-export type DiscoverySource = 'recent-friends' | 'recent-teammates';
-export type SwingSource = 'faceit' | 'estimated';
-
-export interface MatchPerformance {
+/** One finished 5v5 match from a player's FACEIT match-stats history. */
+export interface PlayerMatch {
   matchId: string;
-  playedAt: number;
+  finishedAt: number;
   map: string;
-  result: 'W' | 'L';
-  score: string;
+  won: boolean;
+  /** Rounds won by this player's team, then rounds won by the other team. */
+  teamScore: number | null;
+  enemyScore: number | null;
+  rounds: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  headshots: number;
+  adr: number;
+  mvps: number;
+  doubleKills: number;
+  tripleKills: number;
+  quadroKills: number;
+  pentaKills: number;
+}
+
+/** One player's scoreline inside a group game. */
+export interface GameLine {
+  playerId: string;
   kills: number;
   deaths: number;
   assists: number;
   adr: number;
-  kd: number;
   headshots: number;
-  swing: number;
-  faceitUrl: string;
+  mvps: number;
+  tripleKills: number;
+  quadroKills: number;
+  pentaKills: number;
 }
 
-export interface MapPerformance {
-  map: string;
+/** FACEIT's lifetime CS2 record for a player. Rates are percentages (0–100). */
+export interface LifetimeStats {
   matches: number;
   wins: number;
   winRate: number;
-  swing: number;
-  adr: number;
   kd: number;
+  kr: number | null;
+  adr: number;
+  headshots: number;
+  currentStreak: number;
+  longestStreak: number;
+  recentResults: Array<'W' | 'L'>;
+  entryRate: number | null;
+  entrySuccess: number | null;
+  clutch1v1: number | null;
+  clutch1v1Count: number;
+  clutch1v2: number | null;
+  clutch1v2Count: number;
+  utilityDamagePerRound: number | null;
+  utilitySuccess: number | null;
+  flashSuccess: number | null;
+  flashesPerRound: number | null;
+  enemiesFlashedPerRound: number | null;
+  /** Share of kills made with a sniper rifle. */
+  sniperKillShare: number | null;
+  /** Per-match averages and multi-kill totals, summed over FACEIT's 5v5 map records. */
+  avgKills: number | null;
+  avgAssists: number | null;
+  mvpsPerMatch: number | null;
+  tripleKills: number | null;
+  quadroKills: number | null;
+  pentaKills: number | null;
+}
+
+/** FACEIT's lifetime record on one map (5v5 only). */
+export interface MapStats {
+  map: string;
+  image: string;
+  matches: number;
+  wins: number;
+  winRate: number;
+  kd: number;
+  kr: number;
+  adr: number;
+  headshots: number;
+  kills: number;
+  deaths: number;
+  rounds: number;
+  assists: number;
+  mvps: number;
+  tripleKills: number;
+  quadroKills: number;
+  pentaKills: number;
+  entrySuccess: number | null;
+  clutch1v1: number | null;
+  utilityDamagePerRound: number | null;
+}
+
+/** Totals and rates over a run of a player's matches, counted from FACEIT's per-match stats. */
+export interface Summary {
+  matches: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  rounds: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  kd: number;
+  kr: number;
+  adr: number;
+  /** Share of kills that were headshots. */
+  headshots: number;
+  avgKills: number;
+  avgAssists: number;
+  mvpsPerMatch: number;
+  doubleKills: number;
+  tripleKills: number;
+  quadroKills: number;
+  pentaKills: number;
 }
 
 export interface SquadPlayer {
@@ -32,74 +121,83 @@ export interface SquadPlayer {
   nickname: string;
   displayName: string;
   alias: string | null;
+  isOwner: boolean;
   avatar: string;
   country: string;
   faceitUrl: string;
+  steamUrl: string;
+  steamName: string;
   verified: boolean;
+  memberSince: number | null;
+  region: string;
   elo: number;
-  skillLevel: number;
-  matches: number;
-  statsMatches: number;
-  wins: number;
-  losses: number;
-  winRate: number;
-  swing: number;
-  swingSource: SwingSource;
-  adr: number;
-  kd: number;
-  kr: number;
-  headshots: number;
-  assistsPerMatch: number;
-  entrySuccess: number | null;
-  currentForm: Array<'W' | 'L'>;
-  trend: number[];
-  lastPlayedAt: number;
-  bestMap: MapPerformance | null;
-  maps: MapPerformance[];
-  recentMatches: MatchPerformance[];
+  level: number;
+  regionRank: number | null;
+  countryRank: number | null;
+  lifetime: LifetimeStats | null;
+  maps: MapStats[];
+  /** Latest matches, newest first. */
+  recent: PlayerMatch[];
+  /** Summaries over the latest 10, 30 and 100 matches. */
+  form: { last10: Summary | null; last30: Summary | null; last100: Summary | null };
+  /** Matches played in the last 7, 30 and 90 days. */
+  played: { days7: number; days30: number; days90: number };
+  lastMatchAt: number | null;
 }
 
-export interface RecentMatch {
+export interface GroupGame {
+  key: string;
   matchId: string;
-  playedAt: number;
+  finishedAt: number;
   map: string;
-  result: 'W' | 'L';
-  score: string;
-  teammateIds: string[];
-  faceitUrl: string;
+  won: boolean;
+  teamScore: number | null;
+  enemyScore: number | null;
+  rounds: number;
+  /** The group's players in this match, most kills first. */
+  lines: GameLine[];
 }
 
-export interface MapSummary {
+/** A group game reduced to who played and how it went, enough to recount any subset of the group. */
+export interface GroupLineup {
+  map: string;
+  won: boolean;
+  lines: Array<{ playerId: string; kills: number; deaths: number }>;
+}
+
+/** The group's record on one map: games with two or more chosen players on the same team. */
+export interface TogetherMap {
   map: string;
   matches: number;
   wins: number;
-  winRate: number;
-  ownerAdr: number;
+  /** Kills and deaths of the chosen players only. */
+  kills: number;
+  deaths: number;
 }
 
-export interface DashboardData {
-  owner: {
-    playerId: string;
-    nickname: string;
-    avatar: string;
-    country: string;
-    faceitUrl: string;
-    elo: number;
-    skillLevel: number;
-    winRate: number;
-    wins: number;
-    losses: number;
-    form: Array<'W' | 'L'>;
-  };
-  lookback: number;
-  matchesAnalyzed: number;
-  source: DiscoverySource;
-  sourceLabel: string;
+export interface PairRecord {
+  a: string;
+  b: string;
+  matches: number;
+  wins: number;
+  winRate: number;
+}
+
+export interface SquadOverview {
+  ownerId: string;
   generatedAt: number;
-  swingSource: SwingSource;
+  /** Group-level numbers (games together, pairs, activity) cover this many days. */
+  windowDays: number;
   players: SquadPlayer[];
-  recentMatches: RecentMatch[];
-  maps: MapSummary[];
+  mapImages: Record<string, string>;
+  /** Latest matches where two or more of the group were on the same team. */
+  games: GroupGame[];
+  /** Every group game in the window (games is capped), newest first. */
+  lineups: GroupLineup[];
+  together: { matches: number; wins: number };
+  pairs: PairRecord[];
+  /** Matches per player per week, oldest week first. */
+  activity: { weekStarts: number[]; rows: Array<{ playerId: string; counts: number[] }> };
 }
 
 export type LivePhase = 'live' | 'setup' | 'finished' | 'cancelled';
@@ -153,7 +251,6 @@ export interface LiveScoreline {
   utilityDamage: number;
   enemiesFlashed: number;
   sniperKills: number;
-  swing: number;
 }
 
 export interface LivePlayer {
@@ -183,9 +280,7 @@ export interface LiveTeam {
   name: string;
   avatar: string;
   winProbability: number | null;
-  averageLevel: number;
   averageElo: number;
-  rating: number;
   score: number | null;
   firstHalf: number | null;
   secondHalf: number | null;
@@ -211,28 +306,15 @@ export interface LiveMatch {
   finishedAt: number | null;
   rounds: number | null;
   faceitUrl: string;
-  demoAvailable: boolean;
+  /** FACEIT's demo download for a finished match, when it publishes one. */
+  demoUrl: string;
   trackedPlayerIds: string[];
   teams: LiveTeam[];
 }
 
-export interface SquadMemberStatus {
-  playerId: string;
-  nickname: string;
-  displayName: string;
-  avatar: string;
-  skillLevel: number;
-  elo: number;
-  isOwner: boolean;
-  lastMatchAt: number | null;
-  activeMatchId: string | null;
-}
-
 export interface LiveOverview {
-  owner: { playerId: string; nickname: string; avatar: string; faceitUrl: string };
   generatedAt: number;
   recentWindowMinutes: number;
   webhookEnabled: boolean;
   matches: LiveMatch[];
-  squad: SquadMemberStatus[];
 }

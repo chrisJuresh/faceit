@@ -1,62 +1,42 @@
 <script lang="ts">
-  export let src = '';
-  export let name = '';
-  export let size: 'sm' | 'md' | 'lg' | 'xl' = 'md';
-  let failed = false;
+  /** FACEIT profile photo; falls back to the name's first letter when there is none or it fails. */
+  let { src, name, size = 22 }: { src: string; name: string; size?: number } = $props();
 
-  $: initials = name
-    .split(/\s+/)
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
+  let failed = $state<string | null>(null);
+  const initial = $derived((name.replace(/[^\p{L}\p{N}]/gu, '').charAt(0) || '?').toUpperCase());
 </script>
 
-<span class:sm={size === 'sm'} class:lg={size === 'lg'} class:xl={size === 'xl'} class="avatar">
-  {#if src && !failed}
-    <img src={src} alt="" on:error={() => (failed = true)} />
-  {:else}
-    <span aria-hidden="true">{initials || '?'}</span>
-  {/if}
-</span>
+{#if src && failed !== src}
+  <img
+    class="avatar"
+    {src}
+    alt=""
+    width={size}
+    height={size}
+    loading="lazy"
+    referrerpolicy="no-referrer"
+    style:--size="{size}px"
+    onerror={() => (failed = src)}
+  />
+{:else}
+  <span class="avatar initial" style:--size="{size}px" aria-hidden="true">{initial}</span>
+{/if}
 
 <style>
   .avatar {
-    align-items: center;
-    background: linear-gradient(145deg, var(--surface-raised), var(--surface-quiet));
-    border: 1px solid var(--border-strong);
-    border-radius: 50%;
-    color: var(--text-strong);
-    display: inline-flex;
-    flex: 0 0 auto;
-    font-size: 0.72rem;
-    font-weight: 700;
-    height: 42px;
-    justify-content: center;
-    overflow: hidden;
-    width: 42px;
-  }
-
-  .avatar.sm {
-    height: 30px;
-    width: 30px;
-  }
-
-  .avatar.lg {
-    font-size: 1rem;
-    height: 58px;
-    width: 58px;
-  }
-
-  .avatar.xl {
-    font-size: 1.25rem;
-    height: 76px;
-    width: 76px;
-  }
-
-  img {
-    height: 100%;
+    background: var(--cell);
+    border-radius: 2px;
+    flex: none;
+    height: var(--size);
     object-fit: cover;
-    width: 100%;
+    width: var(--size);
+  }
+
+  .initial {
+    align-items: center;
+    color: var(--muted);
+    display: inline-flex;
+    font: 600 calc(var(--size) * 0.45) / 1 var(--sans);
+    justify-content: center;
   }
 </style>

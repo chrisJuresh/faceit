@@ -1,5 +1,6 @@
 import { dev } from '$app/environment';
-import { buildDashboard } from '$lib/server/dashboard';
+import { buildLiveOverview } from '$lib/server/live';
+import { buildSquad } from '$lib/server/squad';
 import {
   clearOwnerSession,
   isOwner,
@@ -13,34 +14,30 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const prerender = false;
 
-const LOOKBACKS = [5, 10, 15, 25, 50, 100] as const;
+// A cold load reads ~100 FACEIT endpoints at up to 18 a second; give it room on Vercel.
+export const config = { maxDuration: 30 };
 
-export const load: PageServerLoad = async ({ url, cookies, depends, setHeaders }) => {
-  depends('faceit:dashboard');
+export const load: PageServerLoad = async ({ cookies, depends, setHeaders }) => {
+  depends('faceit:squad');
   setHeaders({ 'cache-control': 'private, no-store' });
 
-  const requested = Number(url.searchParams.get('matches'));
-  const lookback = LOOKBACKS.includes(requested as (typeof LOOKBACKS)[number]) ? requested : 15;
+  const [squad, live] = await Promise.all([
+    buildSquad().catch((error) => {
+      console.error('Squad load failed', error);
+      return null;
+    }),
+    buildLiveOverview().catch((error) => {
+      console.error('Live overview failed', error);
+      return null;
+    })
+  ]);
 
-  try {
-    const dashboard = await buildDashboard(lookback);
-    return {
-      dashboard,
-      lookbacks: [...LOOKBACKS],
-      isOwner: isOwner(cookies),
-      ownerAccessConfigured: ownerAccessConfigured(),
-      apiError: null
-    };
-  } catch (error) {
-    console.error('Dashboard load failed', error);
-    return {
-      dashboard: null,
-      lookbacks: [...LOOKBACKS],
-      isOwner: isOwner(cookies),
-      ownerAccessConfigured: ownerAccessConfigured(),
-      apiError: 'FACEIT data is temporarily unavailable. Please retry in a moment.'
-    };
-  }
+  return {
+    squad,
+    live,
+    isOwner: isOwner(cookies),
+    ownerAccessConfigured: ownerAccessConfigured()
+  };
 };
 
 export const actions: Actions = {
