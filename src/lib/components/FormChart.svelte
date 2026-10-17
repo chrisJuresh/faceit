@@ -4,6 +4,7 @@
 
 <script lang="ts">
   import { fixed, headshotRate, kd, score, shortDate } from '$lib/format';
+  import { readout } from '$lib/tooltip.svelte';
   import type { PlayerMatch } from '$lib/types';
 
   /**
@@ -17,9 +18,6 @@
   const LABEL: Record<FormMetric, string> = { adr: 'ADR', kd: 'K/D', kills: 'Kills', hs: 'Headshot %' };
 
   let width = $state(480);
-  let hovered = $state<number | null>(null);
-  let pointer = $state({ x: 0, y: 0 });
-  let tip = $state<HTMLDivElement>();
 
   const series = $derived([...matches].reverse());
   const value = (match: PlayerMatch) =>
@@ -61,24 +59,12 @@
   const format = (amount: number, digits = metric === 'kd' ? 2 : 1) => amount.toFixed(digits);
   const tickText = (tick: number) => (metric === 'kd' ? tick.toFixed(1) : String(tick));
 
-  const active = $derived(hovered === null ? null : series[hovered]);
-  const tipPosition = $derived.by(() => {
-    const box = tip?.getBoundingClientRect();
-    const tipWidth = box?.width ?? 180;
-    const tipHeight = box?.height ?? 80;
-    let x = pointer.x + 14;
-    let y = pointer.y + 14;
-    if (typeof window !== 'undefined') {
-      if (x + tipWidth > window.innerWidth - 8) x = pointer.x - tipWidth - 14;
-      if (y + tipHeight > window.innerHeight - 8) y = pointer.y - tipHeight - 14;
-    }
-    return { x: Math.max(8, x), y: Math.max(8, y) };
-  });
-
-  function track(index: number, event: PointerEvent) {
-    hovered = index;
-    pointer = { x: event.clientX, y: event.clientY };
-  }
+  const describe = (match: PlayerMatch) => [
+    `${shortDate(match.finishedAt)} · ${match.map}`,
+    `${match.won ? 'Win' : 'Loss'} ${score(match.teamScore, match.enemyScore)}`,
+    `${match.kills}–${match.deaths}–${match.assists} · K/D ${fixed(kd(match.kills, match.deaths), 2)}`,
+    `ADR ${fixed(match.adr, 1)} · HS ${headshotRate(match.headshots, match.kills)}%`
+  ];
 </script>
 
 <div class="chart" bind:clientWidth={width}>
@@ -102,7 +88,6 @@
         class="bar"
         class:win={series[index].won}
         class:loss={!series[index].won}
-        class:lit={hovered === index}
         x={PAD.left + index * slot + (slot - barWidth) / 2}
         y={PAD.top + plotHeight - height}
         width={barWidth}
@@ -118,7 +103,7 @@
         {shortDate(series[series.length - 1].finishedAt)}
       </text>
     {/if}
-    {#each series as _, index (index)}
+    {#each series as match, index (index)}
       <rect
         class="hit"
         x={PAD.left + index * slot}
@@ -126,22 +111,11 @@
         width={slot}
         height={plotHeight}
         role="presentation"
-        onpointerenter={(event) => track(index, event)}
-        onpointermove={(event) => track(index, event)}
-        onpointerleave={() => (hovered = null)}
+        {...readout(() => describe(match))}
       />
     {/each}
   </svg>
 </div>
-
-{#if active}
-  <div class="tip" bind:this={tip} style:left="{tipPosition.x}px" style:top="{tipPosition.y}px" aria-hidden="true">
-    {shortDate(active.finishedAt)} · {active.map}<br />
-    {active.won ? 'Win' : 'Loss'} {score(active.teamScore, active.enemyScore)}<br />
-    {active.kills}–{active.deaths}–{active.assists} · K/D {fixed(kd(active.kills, active.deaths), 2)}<br />
-    ADR {fixed(active.adr, 1)} · HS {headshotRate(active.headshots, active.kills)}%
-  </div>
-{/if}
 
 <style>
   .chart {
@@ -165,15 +139,7 @@
 
   .axis {
     fill: var(--muted);
-    font: 10px var(--mono);
-  }
-
-  .bar {
-    opacity: 0.85;
-  }
-
-  .bar.lit {
-    opacity: 1;
+    font: 10.5px var(--mono);
   }
 
   .bar.win {

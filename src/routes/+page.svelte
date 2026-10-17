@@ -7,7 +7,9 @@
   import LiveSection from '$lib/components/LiveSection.svelte';
   import MapPool from '$lib/components/MapPool.svelte';
   import OwnerAccess from '$lib/components/OwnerAccess.svelte';
+  import Divider from '$lib/components/Divider.svelte';
   import PlayerTable from '$lib/components/PlayerTable.svelte';
+  import Tooltip from '$lib/components/Tooltip.svelte';
   import { isActive } from '$lib/columns';
   import { dateTime, timeAgo } from '$lib/format';
   import { LivePoll } from '$lib/live-poll.svelte';
@@ -40,6 +42,8 @@
     )
   );
   const together = $derived(squad?.together ?? { matches: 0, wins: 0 });
+  /** The ticking clock, never behind the data, so ages can't run backwards on a slow browser clock. */
+  const now = $derived(Math.max(clock, squad?.generatedAt ?? 0));
 
   // A full refresh brings a newer overview than the last poll.
   $effect(() => {
@@ -97,9 +101,11 @@
     <div class="tools">
       {#if squad}
         <span class="stamp" title={dateTime(squad.generatedAt)}>
-          {refreshing ? 'Refreshing…' : `Updated ${timeAgo(squad.generatedAt, Math.max(clock, squad.generatedAt))}`}
+          Updated <span class="mono">{timeAgo(squad.generatedAt, now)}</span>
         </span>
-        <button class="text-button" type="button" onclick={refresh} disabled={refreshing}>Refresh</button>
+        <button class="text-button" type="button" onclick={refresh} disabled={refreshing}>
+          {refreshing ? 'Refreshing…' : 'Refresh'}
+        </button>
         <div class="seg" role="group" aria-label="Players shown">
           <button type="button" aria-pressed={!everyone} onclick={() => (everyone = false)}>
             Active<span class="count">{activeCount}</span>
@@ -108,6 +114,7 @@
             All<span class="count">{players.length}</span>
           </button>
         </div>
+        <Divider />
       {/if}
       <div class="seg theme" role="group" aria-label="Theme">
         <button type="button" class="dark" aria-pressed={theme === 'dark'} onclick={() => setTheme('dark')}>Dark</button>
@@ -124,13 +131,13 @@
 <main class="wrap">
   {#if squad}
     <section id="players" class="section">
-      <PlayerTable players={shown} now={squad.generatedAt} isOwner={data.isOwner} {liveIds} />
+      <PlayerTable players={shown} {now} isOwner={data.isOwner} {liveIds} />
 
       <div class="pair">
         <section aria-labelledby="elo-head">
           <div class="sub-head">
             <h3 id="elo-head">ELO</h3>
-            <span class="legend"><span class="key"><i class="line"></i>To next level</span></span>
+            <span class="meta"><i class="lead-key" aria-hidden="true"></i>To next level</span>
           </div>
           <EloLadder players={shown} />
         </section>
@@ -153,13 +160,13 @@
         <h2>Games</h2>
         {#if together.matches}
           <span class="meta">
-            Together, last {squad.windowDays} days: <b>{together.matches}</b> matches ·
+            Together, last <span class="mono">{squad.windowDays}</span> days: <b>{together.matches}</b> matches ·
             <b>{together.wins}–{together.matches - together.wins}</b> ·
             <b>{Math.round((together.wins / together.matches) * 100)}%</b> won
           </span>
         {/if}
       </div>
-      <GroupGames games={squad.games} players={byId} mapImages={squad.mapImages} now={squad.generatedAt} />
+      <GroupGames games={squad.games} players={byId} mapImages={squad.mapImages} {now} />
     </section>
 
     <section id="duos" class="section">
@@ -168,15 +175,20 @@
   {:else}
     <section class="section">
       <div class="section-head"><h2>Players</h2></div>
-      <p class="none">FACEIT isn't responding right now.</p>
-      <button class="text-button more" type="button" onclick={refresh}>Try again</button>
+      <p class="none">FACEIT isn't responding</p>
+      <button class="text-button more" type="button" onclick={refresh} disabled={refreshing}>
+        {refreshing ? 'Trying again…' : 'Try again'}
+      </button>
     </section>
   {/if}
 </main>
 
 <footer class="wrap">
   <div class="footer">
-    <span>FACEIT Data API{#if squad} · {players.length} players{/if}</span>
+    <span>
+      FACEIT Data API{#if squad}{' · '}<span class="mono">{players.length}</span> players · Updated
+        <span class="mono">{dateTime(squad.generatedAt)}</span>{/if}
+    </span>
     <OwnerAccess
       isOwner={data.isOwner}
       configured={data.ownerAccessConfigured}
@@ -184,6 +196,8 @@
     />
   </div>
 </footer>
+
+<Tooltip />
 
 <style>
   .masthead {
@@ -223,13 +237,13 @@
     align-items: center;
     display: flex;
     flex-wrap: wrap;
-    gap: 4px 18px;
+    gap: 4px 14px;
     margin-left: auto;
   }
 
   .stamp {
     color: var(--muted);
-    font: 11.5px var(--mono);
+    font-size: 11.5px;
   }
 
   /* The theme is set on <html> before first paint, so the switch follows it rather than waiting for hydration. */
@@ -248,15 +262,21 @@
     color: var(--ink);
   }
 
-  .tools .text-button {
-    margin-left: -8px;
+  /* The ELO key draws the leader line it explains. */
+  .lead-key {
+    background: var(--muted);
+    display: inline-block;
+    height: 2px;
+    margin-right: 5px;
+    vertical-align: middle;
+    width: 14px;
   }
 
   .pair {
     display: grid;
     gap: 48px;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    margin-top: 48px;
+    margin-top: 40px;
   }
 
   .footer {
@@ -268,15 +288,15 @@
     font-size: 11.5px;
     gap: 8px 24px;
     justify-content: space-between;
-    margin-top: 72px;
-    padding-bottom: 64px;
+    margin-top: 64px;
+    padding-bottom: 72px;
     padding-top: 14px;
   }
 
   @media (max-width: 1060px) {
     .pair {
       grid-template-columns: minmax(0, 1fr);
-      gap: 40px;
+      gap: 36px;
     }
   }
 
@@ -294,17 +314,13 @@
     }
 
     .tools {
-      gap: 2px 12px;
+      gap: 2px 14px;
       margin-left: 0;
       width: 100%;
     }
 
     .stamp {
       display: none;
-    }
-
-    .tools .text-button {
-      margin-left: 0;
     }
   }
 </style>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { shortDate } from '$lib/format';
+  import { readout } from '$lib/tooltip.svelte';
   import type { SquadOverview, SquadPlayer } from '$lib/types';
 
   /** Matches per player per week; deeper accent for busier weeks. */
@@ -15,9 +16,20 @@
       })
   );
   const peak = $derived(Math.max(1, ...rows.flatMap((row) => row.weeks)));
-  // Capped so the count inside stays readable in both themes.
-  const tint = (count: number) =>
-    `color-mix(in srgb, var(--accent) ${Math.round(12 + Math.sqrt(count / peak) * 36)}%, var(--cell))`;
+
+  /**
+   * Five accent steps. The light three carry --ink and the deep two --on-accent, so the count
+   * inside keeps 4.5:1 in both themes.
+   */
+  const STEPS = [
+    { mix: 18, text: 'var(--ink)' },
+    { mix: 32, text: 'var(--ink)' },
+    { mix: 46, text: 'var(--ink)' },
+    { mix: 80, text: 'var(--on-accent)' },
+    { mix: 94, text: 'var(--on-accent)' }
+  ];
+  const step = (count: number) => STEPS[Math.max(0, Math.ceil(Math.sqrt(count / peak) * STEPS.length) - 1)];
+  const plural = (count: number) => `${count} ${count === 1 ? 'match' : 'matches'}`;
 </script>
 
 {#if rows.length}
@@ -28,7 +40,9 @@
           <th class="stick"><span class="sr-only">Player</span></th>
           {#each activity.weekStarts as start, index (start)}
             <th scope="col">
-              {#if index % 3 === 0 && index < activity.weekStarts.length - 2}<span class="week">{shortDate(start)}</span>{/if}
+              {#if index % 3 === 0 && index < activity.weekStarts.length - 2}
+                <span class="week" aria-hidden="true">{shortDate(start)}</span>
+              {/if}
               <span class="sr-only">Week of {shortDate(start)}</span>
             </th>
           {/each}
@@ -38,16 +52,23 @@
       <tbody>
         {#each rows as row (row.player.playerId)}
           <tr>
-            <th class="stick name" scope="row">{row.player.displayName}</th>
+            <th class="stick" scope="row">
+              <span class="name" title={row.player.displayName}>{row.player.displayName}</span>
+            </th>
             {#each row.weeks as count, index (index)}
+              {@const tone = count ? step(count) : null}
               <td
-                style:background={count ? tint(count) : undefined}
-                title="{row.player.displayName}: {count} {count === 1 ? 'match' : 'matches'}, week of {shortDate(activity.weekStarts[index])}"
+                style:background={tone ? `color-mix(in srgb, var(--accent) ${tone.mix}%, var(--cell))` : undefined}
+                style:color={tone?.text}
+                {...readout(() => [
+                  `${row.player.displayName} · week of ${shortDate(activity.weekStarts[index])}`,
+                  plural(count)
+                ])}
               >
-                {count || ''}
+                <span aria-hidden="true">{count || ''}</span><span class="sr-only">{plural(count)}</span>
               </td>
             {/each}
-            <td class="total">{row.total}</td>
+            <td class="total" class:zero={!row.total}>{row.total}</td>
           </tr>
         {/each}
       </tbody>
@@ -71,32 +92,34 @@
   }
 
   thead th {
-    height: 22px;
+    height: 26px;
     position: relative;
   }
 
   .week {
     bottom: 5px;
     color: var(--muted);
-    font: 10px var(--mono);
+    font: 10.5px var(--mono);
     left: 1px;
     position: absolute;
   }
 
   .stick {
-    background: var(--page);
+    background: var(--surface);
     left: 0;
     position: sticky;
+    text-align: left;
     z-index: 1;
   }
 
+  /* Capped at the ladder's label width so the two charts' rows line up side by side. */
   .name {
     color: var(--ink-2);
+    display: block;
     font-size: 12px;
-    max-width: 120px;
+    max-width: 112px;
     overflow: hidden;
-    padding-right: 12px;
-    text-align: left;
+    padding-right: 14px;
     text-overflow: ellipsis;
   }
 
@@ -119,8 +142,18 @@
     width: auto;
   }
 
-  thead .total {
+  .total.zero {
     color: var(--muted);
-    font: 500 11px var(--sans);
+  }
+
+  thead .total {
+    color: var(--ink-2);
+    font: 500 11.5px var(--sans);
+  }
+
+  @media (max-width: 640px) {
+    .stick {
+      box-shadow: inset -1px 0 var(--rule);
+    }
   }
 </style>

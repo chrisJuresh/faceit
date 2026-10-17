@@ -1,3 +1,4 @@
+import { thousands } from './format';
 import type { LifetimeStats, SquadPlayer, Summary } from './types';
 
 export type Scope = 'last10' | 'last30' | 'last100' | 'lifetime';
@@ -118,7 +119,7 @@ const RESULTS: ColumnGroup = {
       text: (player, scope) => {
         if (scope === 'lifetime') {
           const life = player.lifetime;
-          return life ? `${life.wins}–${life.matches - life.wins}` : null;
+          return life ? `${thousands(life.wins)}–${thousands(life.matches - life.wins)}` : null;
         }
         const summary = player.form[scope];
         return summary ? `${summary.wins}–${summary.losses}` : null;
@@ -182,9 +183,9 @@ const FORM: ColumnGroup = {
 const PLAYED: ColumnGroup = {
   label: 'Played',
   columns: [
-    { key: 'days7', label: '7 d', title: 'Matches in the last 7 days', digits: 0, value: (p) => p.played.days7, quietZero: true },
-    { key: 'days30', label: '30 d', title: 'Matches in the last 30 days', digits: 0, value: (p) => p.played.days30, quietZero: true },
-    { key: 'days90', label: '90 d', title: 'Matches in the last 90 days', digits: 0, value: (p) => p.played.days90, quietZero: true },
+    { key: 'days7', label: '7d', title: 'Matches in the last 7 days', digits: 0, value: (p) => p.played.days7, quietZero: true },
+    { key: 'days30', label: '30d', title: 'Matches in the last 30 days', digits: 0, value: (p) => p.played.days30, quietZero: true },
+    { key: 'days90', label: '90d', title: 'Matches in the last 90 days', digits: 0, value: (p) => p.played.days90, quietZero: true },
     { key: 'last', label: 'Last', title: 'Last match', digits: 0, value: (p) => p.lastMatchAt, age: true }
   ]
 };

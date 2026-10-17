@@ -2,12 +2,16 @@
   import { LEVEL_FLOORS, eloToNextLevel, levelForElo, levelVar } from '$lib/levels';
   import type { SquadPlayer } from '$lib/types';
 
-  /** Each player's ELO against FACEIT's level bands, with a leader line to the next level. */
+  /**
+   * Each player's ELO against FACEIT's level bands, with a leader line to the next level. Players
+   * without an ELO keep their row, so this lists the same people as Activity beside it.
+   */
   let { players }: { players: SquadPlayer[] } = $props();
 
-  const ranked = $derived(players.filter((player) => player.elo > 0).sort((a, b) => b.elo - a.elo));
-  const low = $derived(Math.min(500, Math.floor((Math.min(...ranked.map((p) => p.elo)) - 40) / 50) * 50));
-  const high = $derived(Math.max(2150, Math.ceil((Math.max(...ranked.map((p) => p.elo)) + 80) / 50) * 50));
+  const ranked = $derived([...players].sort((a, b) => b.elo - a.elo));
+  const elos = $derived(ranked.map((player) => player.elo).filter((elo) => elo > 0));
+  const low = $derived(elos.length ? Math.min(500, Math.floor((Math.min(...elos) - 40) / 50) * 50) : 500);
+  const high = $derived(elos.length ? Math.max(2150, Math.ceil((Math.max(...elos) + 80) / 50) * 50) : 2150);
   const x = (elo: number) => ((Math.min(Math.max(elo, low), high) - low) / (high - low)) * 100;
 
   const bands = $derived(
@@ -41,30 +45,32 @@
     </div>
     <ol>
       {#each ranked as player (player.playerId)}
-        {@const next = eloToNextLevel(player.elo)}
+        {@const next = player.elo ? eloToNextLevel(player.elo) : null}
         {@const level = player.level || levelForElo(player.elo)}
         <li class="row">
-          <span class="name">{player.displayName}</span>
+          <span class="name" title={player.displayName}>{player.displayName}</span>
           <span class="track">
             {#each floors as floor (floor)}<i class="floor" style:left="{floor}%"></i>{/each}
-            {#if next !== null}
-              <i
-                class="lead"
-                style:left="{x(player.elo)}%"
-                style:width="{x(player.elo + next) - x(player.elo)}%"
-                style:--level={levelVar(level)}
-              ></i>
-              <span class="gap" style:left="{x(player.elo + next)}%">{next}<span class="sr-only"> to level {level + 1}</span></span>
+            {#if player.elo}
+              {#if next !== null}
+                <i
+                  class="lead"
+                  style:left="{x(player.elo)}%"
+                  style:width="{x(player.elo + next) - x(player.elo)}%"
+                  style:--level={levelVar(level)}
+                ></i>
+                <span class="gap" style:left="{x(player.elo + next)}%">{next}<span class="sr-only"> to level {level + 1}</span></span>
+              {/if}
+              <i class="dot" style:left="{x(player.elo)}%" style:--level={levelVar(level)}></i>
             {/if}
-            <i class="dot" style:left="{x(player.elo)}%" style:--level={levelVar(level)}></i>
           </span>
-          <span class="value">{player.elo.toLocaleString('en-GB')}</span>
+          <span class="value" class:missing={!player.elo}>{player.elo ? player.elo.toLocaleString('en-GB') : '—'}</span>
         </li>
       {/each}
     </ol>
   </figure>
 {:else}
-  <p class="none">No ELO to show</p>
+  <p class="none">No players</p>
 {/if}
 
 <style>
@@ -113,7 +119,7 @@
 
   .band .number {
     color: var(--muted);
-    font: 10px var(--mono);
+    font: 10.5px var(--mono);
     left: 50%;
     position: absolute;
     top: -16px;
@@ -142,7 +148,7 @@
 
   .gap {
     color: var(--muted);
-    font: 10px var(--mono);
+    font: 10.5px var(--mono);
     margin-left: 5px;
     position: absolute;
     top: 50%;
@@ -153,15 +159,19 @@
     background: var(--level);
     border-radius: 50%;
     box-shadow: 0 0 0 2px var(--surface);
-    height: 9px;
-    margin-left: -4.5px;
+    height: 8px;
+    margin-left: -4px;
     position: absolute;
-    top: calc(50% - 4.5px);
-    width: 9px;
+    top: calc(50% - 4px);
+    width: 8px;
   }
 
   .value {
     font: 12px var(--mono);
     text-align: right;
+  }
+
+  .value.missing {
+    color: var(--muted);
   }
 </style>

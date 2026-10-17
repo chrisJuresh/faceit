@@ -14,6 +14,15 @@ export const kd = (kills: number, deaths: number) => (deaths ? kills / deaths : 
 /** Share of kills that were headshots, as a whole percentage. */
 export const headshotRate = (headshots: number, kills: number) => (kills ? Math.round((headshots / kills) * 100) : 0);
 
+/**
+ * 'pos' or 'neg' for a ratio around 1 (K/D), judged on the value as shown to `digits` places,
+ * so 0.996 (shown as "1.00") is not coloured as below 1.
+ */
+export function aroundOne(value: number | null | undefined, digits = 2) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '';
+  return Number(value.toFixed(digits)) >= 1 ? 'pos' : 'neg';
+}
+
 /** "+4", "−3", "0". */
 export const signed = (value: number) => (value > 0 ? `+${value}` : value < 0 ? `−${-value}` : '0');
 
@@ -63,6 +72,13 @@ export function dateTime(timestamp: number) {
     minute: '2-digit',
     timeZone: 'UTC'
   }).format(new Date(timestamp * 1000))} UTC`;
+}
+
+/** "19:42 UTC". Pinned to UTC so the server render and the browser agree. */
+export function clockUtc(timestamp: number) {
+  return `${new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }).format(
+    new Date(timestamp * 1000)
+  )} UTC`;
 }
 
 export function duration(seconds: number) {

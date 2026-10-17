@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fixed } from '$lib/format';
   import type { PairRecord, SquadPlayer } from '$lib/types';
+  import Divider from './Divider.svelte';
   import WinTrack from './WinTrack.svelte';
 
   let {
@@ -21,7 +22,8 @@
       .sort((x, y) =>
         order === 'games'
           ? y.matches - x.matches || y.winRate - x.winRate
-          : y.winRate - x.winRate || y.matches - x.matches
+          : // Pairs with fewer than FEW games sit below every pair with more, so a 2–0 can't top the list.
+            Number(y.matches >= FEW) - Number(x.matches >= FEW) || y.winRate - x.winRate || y.matches - x.matches
       )
   );
   const half = $derived(Math.ceil(shown.length / 2));
@@ -31,13 +33,13 @@
 
 <div class="section-head">
   <h2>Duos</h2>
-  <span class="meta">Same team, last {windowDays} days</span>
+  <span class="meta">Same team, last <span class="mono">{windowDays}</span> days</span>
   <div class="controls">
     <div class="seg" role="group" aria-label="Order">
       <button type="button" aria-pressed={order === 'games'} onclick={() => (order = 'games')}>Most played</button>
       <button type="button" aria-pressed={order === 'rate'} onclick={() => (order = 'rate')}>Win %</button>
     </div>
-    <span class="divider" aria-hidden="true"></span>
+    <Divider />
     <div class="seg" role="group" aria-label="Pairs shown">
       <button type="button" aria-pressed={!everyone} onclick={() => (everyone = false)}>3+ matches</button>
       <button type="button" aria-pressed={everyone} onclick={() => (everyone = true)}>
@@ -50,32 +52,39 @@
 {#if shown.length}
   <div class="columns">
     {#each columns as list, index (index)}
-      <table class="mini">
-        <thead>
-          <tr>
-            <th class="l" scope="col">Pair</th>
-            <th scope="col">M</th>
-            <th scope="col">W–L</th>
-            <th scope="col">Win %</th>
-            <th scope="col"><span class="sr-only">Win rate from 0 to 100, 50 marked</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each list as pair (pair.a + pair.b)}
-            <tr class:low={pair.matches < FEW}>
-              <td class="l">{name(pair.a)}<span class="amp">+</span><wbr />{name(pair.b)}</td>
-              <td>{pair.matches}</td>
-              <td>{pair.wins}–{pair.matches - pair.wins}</td>
-              <td>{fixed(pair.winRate)}</td>
-              <td class="track"><WinTrack rate={pair.winRate} faded={pair.matches < FEW} /></td>
+      <div class="scroll">
+        <table class="mini">
+          <thead>
+            <tr>
+              <th class="l" scope="col">Pair</th>
+              <th scope="col">M</th>
+              <th scope="col">W–L</th>
+              <th scope="col">Win %</th>
+              <th scope="col"><span class="sr-only">Win rate from 0 to 100, 50 marked</span></th>
             </tr>
-          {/each}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {#each list as pair (pair.a + pair.b)}
+              <tr class:low={pair.matches < FEW}>
+                <th class="l" scope="row" title="{name(pair.a)} + {name(pair.b)}">
+                  <span class="pair"><span class="who-name">{name(pair.a)}</span><span class="amp">+</span><span class="who-name"
+                      >{name(pair.b)}</span
+                    ></span
+                  >
+                </th>
+                <td>{pair.matches}</td>
+                <td>{pair.wins}–{pair.matches - pair.wins}</td>
+                <td>{fixed(pair.winRate)}</td>
+                <td class="track"><WinTrack rate={pair.winRate} faded={pair.matches < FEW} /></td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
     {/each}
   </div>
 {:else}
-  <p class="none">No pair has played three matches together in the last {windowDays} days</p>
+  <p class="none">No duos</p>
 {/if}
 
 <style>
@@ -85,20 +94,29 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .mini td {
-    height: 30px;
+  .pair {
+    align-items: baseline;
+    display: inline-flex;
+    max-width: 100%;
+  }
+
+  .who-name {
+    max-width: 12em;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .amp {
     color: var(--muted);
+    flex: none;
     margin: 0 6px;
   }
 
   .track {
-    --track-width: 80px;
-    padding-left: 14px;
+    padding-left: 10px;
     text-align: left;
-    width: 96px;
+    width: 88px;
   }
 
   @media (max-width: 860px) {
@@ -106,26 +124,14 @@
       grid-template-columns: minmax(0, 1fr);
     }
 
-    .columns .mini + .mini thead {
+    .columns .scroll + .scroll thead {
       display: none;
     }
   }
 
   @media (max-width: 640px) {
-    .mini td.l {
-      white-space: normal;
-    }
-
-    .mini td {
-      height: auto;
-      padding-bottom: 5px;
-      padding-top: 5px;
-    }
-
-    .track {
-      --track-width: 48px;
-      padding-left: 8px;
-      width: 58px;
+    .who-name {
+      max-width: 7em;
     }
   }
 </style>

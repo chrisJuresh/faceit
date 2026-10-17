@@ -15,15 +15,6 @@ export function eloToNextLevel(elo: number) {
   return next === undefined ? null : next - elo;
 }
 
-/** FACEIT's own skill-level colours. */
-export function levelColor(level: number) {
-  if (level >= 10) return '#fe1f00';
-  if (level >= 8) return '#ff6309';
-  if (level >= 4) return '#ffc800';
-  if (level >= 2) return '#1ce400';
-  return '#eeeeee';
-}
-
 /** The CSS variable for a level's colour; app.css darkens them for the light theme. */
 export function levelVar(level: number) {
   if (level >= 10) return 'var(--level-10)';

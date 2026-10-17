@@ -116,6 +116,12 @@ p {
   margin: 0;
 }
 
+/* Block labels inside a band or panel, whatever their heading level. */
+.block-label {
+  color: var(--ink-2);
+  font: 600 12px/18px var(--sans);
+}
+
 img {
   display: block;
 }
@@ -242,9 +248,6 @@ img {
     width: 100%;
   }
 
-  .section-head .divider {
-    display: none;
-  }
 }
 
 /* ---------- Controls ---------- */
@@ -314,6 +317,7 @@ img {
 }
 
 .text-button:disabled {
+  color: var(--muted);
   cursor: default;
 }
 
@@ -324,7 +328,7 @@ img {
 /* Outbound links: quiet text with an arrow. */
 .ext {
   color: var(--ink-2);
-  font-size: 12.5px;
+  font-size: 12px;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -335,12 +339,41 @@ img {
   text-underline-offset: 3px;
 }
 
+/* One input style: an underline that turns accent on focus, plus the global focus ring. */
+.input {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--rule-2);
+  color: var(--ink);
+  font-size: 12.5px;
+  padding: 2px 0;
+}
+
+.input:focus {
+  border-bottom-color: var(--accent);
+}
+
+.field-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.error {
+  color: var(--loss-text);
+  font-size: 12px;
+}
+
 /* ---------- Tables ---------- */
 
-/* A query container, so detail panels inside can match its visible width. */
+/*
+  A query container, so detail panels inside can match its visible width, and a containing
+  block, so absolutely positioned text inside (screen-reader labels) is clipped with the table
+  instead of widening the page.
+*/
 .scroll {
   container-type: inline-size;
   overflow-x: auto;
+  position: relative;
   scrollbar-color: var(--rule-2) transparent;
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
@@ -375,7 +408,8 @@ img {
   font-variant-numeric: tabular-nums;
 }
 
-.tbl thead th {
+/* Heads of this table only, not of .mini tables nested in its detail rows. */
+.tbl > thead th {
   color: var(--muted);
   font: 500 11.5px/1.2 var(--sans);
   height: 24px;
@@ -383,8 +417,11 @@ img {
 
 .tbl thead tr.groups th {
   height: 22px;
-  position: relative;
   text-align: left;
+}
+
+.tbl thead tr.groups th.group {
+  position: relative;
 }
 
 .tbl thead tr.groups th.group::after {
@@ -428,7 +465,7 @@ img {
   background-image: linear-gradient(var(--sorted), var(--sorted));
 }
 
-.tbl tr.low td,
+.tbl > tbody > tr.low > td,
 .tbl td.low {
   color: var(--muted);
 }
@@ -441,8 +478,44 @@ img {
   background-color: var(--hover);
 }
 
+/* Hover replaces the sorted-column tint rather than stacking on it, which would cost contrast. */
+.tbl tr.row:hover > td.sorted {
+  background-image: none;
+}
+
 .tbl tr.open > * {
   background-color: var(--band);
+}
+
+/* Inside a band or panel, opened rows step back to the page colour so they stand apart. */
+.on-band .tbl tr.open > *,
+.on-band .tbl tr.detail > td {
+  --surface: var(--page);
+  background-color: var(--page);
+}
+
+/* A team's header row inside a roster or scoreboard. The label stays in view while scrolling. */
+.tbl tr.team th {
+  border-bottom: 1px solid var(--rule-2);
+  font-weight: 600;
+  height: 36px;
+  padding-top: 8px;
+}
+
+.team-label {
+  display: inline-block;
+  left: 7px;
+  position: sticky;
+}
+
+.team-sub {
+  color: var(--muted);
+  font: 400 11.5px var(--sans);
+  margin-left: 12px;
+}
+
+.team-sub .res {
+  font-size: 11.5px;
 }
 
 /* A full-width row under an opened row. */
@@ -499,21 +572,28 @@ th.sorted .sort {
 
 .mini th,
 .mini td {
-  height: 26px;
+  height: 28px;
   padding: 0 6px;
   text-align: right;
 }
 
-.mini th {
+.mini thead th {
   border-bottom: 1px solid var(--rule-2);
-  color: var(--muted);
-  font: 500 11px var(--sans);
+  color: var(--ink-2);
+  font: 500 11.5px var(--sans);
+  height: 24px;
 }
 
 .mini td {
   border-bottom: 1px solid var(--rule);
   font: 12px var(--mono);
   font-variant-numeric: tabular-nums;
+}
+
+/* Row headers (a duo pair) read as body text. */
+.mini tbody th {
+  border-bottom: 1px solid var(--rule);
+  font: 400 12.5px var(--sans);
 }
 
 .mini .l {
@@ -530,8 +610,13 @@ th.sorted .sort {
   padding-left: 0;
 }
 
-.mini tr.low td {
+/* Low-sample rows dim their numbers; the identity cell (map or pair) keeps its colour. */
+.mini tr.low td:not(.l) {
   color: var(--muted);
+}
+
+.mini td.mono {
+  font: 12px var(--mono);
 }
 
 /* Player name cell: photo, name, country. */
@@ -542,13 +627,27 @@ th.sorted .sort {
   min-width: 0;
 }
 
+/* The sticky name column is 150-200px wide including its 7px padding; long names end in an ellipsis. */
 .tbl th .who {
   min-width: 150px;
+}
+
+.tbl .stick .who {
+  max-width: 186px;
 }
 
 .who .name {
   font-size: 13px;
   font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Name buttons clip through an inner span, which ellipsizes reliably in every engine. */
+.who .name > span {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -560,7 +659,15 @@ th.sorted .sort {
 
 .who .cc {
   color: var(--muted);
+  flex: none;
   font: 10.5px var(--mono);
+}
+
+/* The row's chevron, pushed to the end of the name cell. */
+.who .push {
+  flex: none;
+  margin-left: auto;
+  padding-left: 10px;
 }
 
 /* Expand/collapse chevron. */
@@ -658,6 +765,11 @@ th.sorted .sort {
   width: 14px;
 }
 
+.legend.below {
+  display: flex;
+  margin-top: 8px;
+}
+
 .swatch.win {
   background: var(--win);
 }
@@ -666,13 +778,27 @@ th.sorted .sort {
   background: var(--loss);
 }
 
-/* Map thumbnail. */
-.thumb {
+/* Map images come in three sizes; MapImage keeps the slot when an image is missing. */
+.map-img {
   background: var(--cell);
   border-radius: 2px;
+  display: block;
   flex: none;
-  height: 19px;
   object-fit: cover;
+}
+
+.map-img.large {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+}
+
+.map-img.medium {
+  height: 32px;
+  width: 56px;
+}
+
+.map-img.small {
+  height: 19px;
   width: 34px;
 }
 
@@ -683,10 +809,11 @@ th.sorted .sort {
   color: var(--page);
   font: 11.5px/1.5 var(--mono);
   max-width: 280px;
+  overflow-wrap: anywhere;
   padding: 6px 9px;
   pointer-events: none;
   position: fixed;
-  white-space: nowrap;
+  width: max-content;
   z-index: 30;
 }
 
@@ -697,6 +824,15 @@ th.sorted .sort {
 
   .tbl th .who {
     min-width: 0;
+  }
+
+  .tbl .stick .who {
+    max-width: 136px;
+  }
+
+  /* The 8px gap is enough on phones; the name gets the room. */
+  .who .push {
+    padding-left: 0;
   }
 
   .tbl .who .cc {

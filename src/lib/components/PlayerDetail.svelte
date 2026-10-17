@@ -1,14 +1,20 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import { age, dateTime, fixed, headshotRate, kd, monthYear, roomUrl, score, thousands, timeAgo } from '$lib/format';
+  import { age, dateTime, fixed, headshotRate, kd, monthYear, roomUrl, score, thousands } from '$lib/format';
   import { eloToNextLevel, levelForElo } from '$lib/levels';
   import type { SquadPlayer } from '$lib/types';
   import Avatar from './Avatar.svelte';
   import FormChart, { type FormMetric } from './FormChart.svelte';
+  import Level from './Level.svelte';
   import WinTrack from './WinTrack.svelte';
+  import type { SubmitFunction } from '@sveltejs/kit';
 
-  let { player, now, isOwner = false }: { player: SquadPlayer; now: number; isOwner?: boolean } =
-    $props();
+  let {
+    player,
+    now,
+    isOwner = false,
+    metric = $bindable('adr')
+  }: { player: SquadPlayer; now: number; isOwner?: boolean; metric?: FormMetric } = $props();
 
   const METRICS: Array<{ key: FormMetric; label: string }> = [
     { key: 'adr', label: 'ADR' },
@@ -17,13 +23,22 @@
     { key: 'hs', label: 'HS %' }
   ];
 
-  let metric = $state<FormMetric>('adr');
   let allMatches = $state(false);
+  let renameError = $state<string | null>(null);
 
   const life = $derived(player.lifetime);
   const toNext = $derived(player.elo ? eloToNextLevel(player.elo) : null);
   const matches = $derived(allMatches ? player.recent : player.recent.slice(0, 10));
-  const rank = (position: number | null) => (position ? `#${position.toLocaleString('en-GB')}` : 'Unranked');
+  const rank = (position: number | null) => (position ? `#${position.toLocaleString('en-GB')}` : '—');
+
+  const rename: SubmitFunction = () => {
+    return async ({ result, update }) => {
+      if (result.type === 'failure') renameError = String(result.data?.renameError ?? "Couldn't save the name");
+      else if (result.type === 'error') renameError = "Couldn't save the name";
+      else renameError = null;
+      await update();
+    };
+  };
 </script>
 
 <div class="detail">
@@ -32,9 +47,12 @@
       <div class="identity">
         <Avatar src={player.avatar} name={player.displayName} size={44} />
         <div>
-          <p class="big">{player.displayName}</p>
+          <h3 class="big">{player.displayName}</h3>
           <p class="sub">
-            {[player.country, player.region, player.level ? `level ${player.level}` : ''].filter(Boolean).join(' · ')}
+            {#if player.country || player.region}
+              <span>{[player.country, player.region].filter(Boolean).join(' · ')}</span>
+            {/if}
+            <Level level={player.level} />
           </p>
         </div>
       </div>
@@ -44,6 +62,9 @@
         {#if toNext !== null}
           <dt>To level {levelForElo(player.elo) + 1}</dt>
           <dd>{toNext}</dd>
+        {:else if player.elo}
+          <dt>Level</dt>
+          <dd>10</dd>
         {/if}
         <dt>{player.region || 'Region'} rank</dt>
         <dd>{rank(player.regionRank)}</dd>
@@ -56,7 +77,7 @@
           <dd>{monthYear(player.memberSince)}</dd>
         {/if}
         <dt>Last match</dt>
-        <dd>{timeAgo(player.lastMatchAt, now)}</dd>
+        <dd>{age(player.lastMatchAt, now)}</dd>
         {#if life}
           <dt>Lifetime matches</dt>
           <dd>{thousands(life.matches)}</dd>
@@ -72,7 +93,7 @@
 
     <div class="form">
       <div class="mini-head">
-        <h4>Last {player.recent.length} matches</h4>
+        <h4 class="block-label">Last <span class="mono">{player.recent.length}</span> matches</h4>
         {#if player.recent.length}
           <div class="seg small" role="group" aria-label="Chart metric">
             {#each METRICS as option (option.key)}
@@ -85,18 +106,18 @@
       </div>
       {#if player.recent.length}
         <FormChart matches={player.recent} {metric} />
-        <p class="legend">
+        <p class="legend below">
           <span class="key"><i class="swatch win"></i>Win</span>
           <span class="key"><i class="swatch loss"></i>Loss</span>
           <span class="key"><i class="line"></i>Average</span>
         </p>
       {:else}
-        <p class="none">No recent 5v5 matches</p>
+        <p class="none">No matches</p>
       {/if}
     </div>
 
     <div class="maps">
-      <div class="mini-head"><h4>Maps, lifetime</h4></div>
+      <div class="mini-head"><h4 class="block-label">Maps, lifetime</h4></div>
       {#if player.maps.length}
         <div class="scroll">
           <table class="mini">
@@ -127,14 +148,14 @@
           </table>
         </div>
       {:else}
-        <p class="none">No map record</p>
+        <p class="none">No map stats</p>
       {/if}
     </div>
   </div>
 
   {#if player.recent.length}
     <div class="matches">
-      <div class="mini-head"><h4>Matches</h4></div>
+      <div class="mini-head"><h4 class="block-label">Matches</h4></div>
       <div class="scroll">
         <table class="mini">
           <thead>
@@ -160,7 +181,7 @@
           <tbody>
             {#each matches as match, index (index)}
               <tr>
-                <td class="l muted" title={dateTime(match.finishedAt)}>{age(match.finishedAt, now)}</td>
+                <td class="l mono muted" title={dateTime(match.finishedAt)}>{age(match.finishedAt, now)}</td>
                 <td class="l">{match.map}</td>
                 <td><span class="res" class:win={match.won} class:loss={!match.won}>{match.won ? 'W' : 'L'}</span></td>
                 <td>{score(match.teamScore, match.enemyScore)}</td>
@@ -185,18 +206,26 @@
       </div>
       {#if player.recent.length > 10}
         <button class="text-button more" type="button" onclick={() => (allMatches = !allMatches)}>
-          {allMatches ? 'Show 10' : `Show all ${player.recent.length}`}
+          {#if allMatches}Show <span class="mono">10</span>{:else}Show all <span class="mono">{player.recent.length}</span>{/if}
         </button>
       {/if}
     </div>
   {/if}
 
   {#if isOwner}
-    <form class="alias" method="POST" action="?/rename" use:enhance>
+    <form class="alias" method="POST" action="?/rename" use:enhance={rename}>
       <input type="hidden" name="playerId" value={player.playerId} />
-      <label for="alias-{player.playerId}">Display name</label>
-      <input id="alias-{player.playerId}" name="alias" maxlength="32" value={player.alias ?? ''} placeholder={player.nickname} />
+      <label class="field-label" for="alias-{player.playerId}">Display name</label>
+      <input
+        id="alias-{player.playerId}"
+        class="input"
+        name="alias"
+        maxlength="32"
+        value={player.alias ?? ''}
+        placeholder={player.nickname}
+      />
       <button class="text-button" type="submit">Save</button>
+      {#if renameError}<p class="error">{renameError}</p>{/if}
     </form>
   {/if}
 </div>
@@ -220,14 +249,17 @@
   }
 
   .big {
-    font-size: 16px;
-    font-weight: 600;
+    font: 600 15px/22px var(--sans);
     letter-spacing: -0.01em;
   }
 
   .sub {
+    align-items: center;
     color: var(--muted);
+    display: flex;
     font: 11.5px var(--mono);
+    gap: 8px;
+    margin-top: 2px;
   }
 
   .links {
@@ -240,12 +272,7 @@
     align-items: baseline;
     display: flex;
     gap: 12px;
-    margin-bottom: 6px;
-  }
-
-  h4 {
-    color: var(--ink-2);
-    font: 600 12px/20px var(--sans);
+    margin-bottom: 8px;
   }
 
   .seg.small {
@@ -253,12 +280,7 @@
   }
 
   .seg.small button {
-    font-size: 11.5px;
     padding: 3px 5px;
-  }
-
-  .legend {
-    margin-top: 6px;
   }
 
   .mini td.muted {
@@ -283,28 +305,17 @@
     border-top: 1px solid var(--rule);
     display: flex;
     flex-wrap: wrap;
-    font-size: 12.5px;
     gap: 8px 12px;
     margin-top: 22px;
     padding-top: 12px;
   }
 
-  .alias label {
-    color: var(--muted);
-  }
-
-  .alias input {
-    background: transparent;
-    border: 0;
-    border-bottom: 1px solid var(--rule-2);
-    color: var(--ink);
-    padding: 2px 0;
+  .alias .input {
     width: 14em;
   }
 
-  .alias input:focus {
-    border-bottom-color: var(--accent);
-    outline: none;
+  .alias .error {
+    width: 100%;
   }
 
   @media (max-width: 1060px) {
@@ -320,7 +331,7 @@
 
   @media (max-width: 640px) {
     .detail {
-      padding: 16px 0 20px;
+      padding: 20px 12px 24px;
     }
 
     .grid {

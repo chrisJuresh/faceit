@@ -74,6 +74,8 @@ describe('columns', () => {
   it('shows a W–L record and sorts it by wins', () => {
     expect(column('record').text?.(players[0], 'last10')).toBe('6–4');
     expect(column('record').text?.(players[0], 'lifetime')).toBe('55–45');
+    const veteran = { ...players[0], lifetime: { ...players[0].lifetime!, matches: 2500, wins: 1312 } } as SquadPlayer;
+    expect(column('record').text?.(veteran, 'lifetime')).toBe('1,312–1,188');
     expect(column('record').value(players[0], 'last10')).toBe(6);
   });
 

@@ -12,7 +12,7 @@
   .elo {
     align-items: center;
     display: inline-flex;
-    gap: 7px;
+    gap: 8px;
     justify-content: flex-end;
   }
 
