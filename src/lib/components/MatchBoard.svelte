@@ -59,8 +59,8 @@
     if (match.phase === 'live' && match.startedAt) return `Started ${timeAgo(match.startedAt, now)}`;
     if (match.phase === 'setup') return match.configuredAt ? `Room opened ${timeAgo(match.configuredAt, now)}` : 'Starting';
     if (finished && match.finishedAt) {
-      const length = match.startedAt ? ` · ${duration(match.finishedAt - match.startedAt)}` : '';
-      return `${dateTime(match.finishedAt)}${length}`;
+      const length = match.startedAt ? ` · ${duration(match.finishedAt - match.startedAt)} long` : '';
+      return `Finished ${timeAgo(match.finishedAt, now)}${length}`;
     }
     return match.status;
   });
@@ -81,7 +81,7 @@
       </h3>
       {#if halves}<p class="meta-line">{halves}</p>{/if}
       <p class="meta-line">{place}</p>
-      <p class="meta-line">{when}</p>
+      <p class="meta-line" title={match.finishedAt ? dateTime(match.finishedAt) : undefined}>{when}</p>
     </div>
     <p class="links">
       <a href={match.faceitUrl} target="_blank" rel="noreferrer">Match room ↗</a>

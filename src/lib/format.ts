@@ -34,13 +34,19 @@ export function shortDate(timestamp: number) {
   );
 }
 
+/**
+ * Absolute time for tooltips. Pinned to UTC so the server render and the browser agree;
+ * visible times on the page are relative ("4d ago") instead.
+ */
 export function dateTime(timestamp: number) {
-  return new Intl.DateTimeFormat('en-GB', {
+  return `${new Intl.DateTimeFormat('en-GB', {
     day: 'numeric',
     month: 'short',
+    year: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
-  }).format(new Date(timestamp * 1000));
+    minute: '2-digit',
+    timeZone: 'UTC'
+  }).format(new Date(timestamp * 1000))} UTC`;
 }
 
 export function duration(seconds: number) {

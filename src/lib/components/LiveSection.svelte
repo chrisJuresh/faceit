@@ -1,23 +1,24 @@
 <script lang="ts">
   import { duration, resultText, timeAgo } from '$lib/format';
   import type { GroupGame, LiveOverview, SquadPlayer } from '$lib/types';
-  import { onMount } from 'svelte';
   import MatchBoard from './MatchBoard.svelte';
 
   let {
     overview,
     failed = false,
+    now,
     players,
     games
-  }: { overview: LiveOverview | null; failed?: boolean; players: SquadPlayer[]; games: GroupGame[] } =
-    $props();
+  }: {
+    overview: LiveOverview | null;
+    failed?: boolean;
+    /** Unix seconds; the page ticks it. */
+    now: number;
+    players: SquadPlayer[];
+    games: GroupGame[];
+  } = $props();
 
-  let clock = $state(Math.floor(Date.now() / 1000));
-
-  onMount(() => {
-    const timer = setInterval(() => (clock = Math.floor(Date.now() / 1000)), 15_000);
-    return () => clearInterval(timer);
-  });
+  const clock = $derived(Math.max(now, overview?.generatedAt ?? 0));
 
   const matches = $derived(overview?.matches ?? []);
   const active = $derived(matches.filter((match) => match.phase === 'live' || match.phase === 'setup'));

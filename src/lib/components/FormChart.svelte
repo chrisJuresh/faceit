@@ -77,7 +77,7 @@
         {shortDate(series[series.length - 1].finishedAt)}
       </text>
     {/if}
-    {#each series as match, index (match.matchId)}
+    {#each series as _, index (index)}
       <rect
         class="hit"
         x={PAD.left + index * slot}

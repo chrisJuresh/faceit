@@ -128,7 +128,7 @@
             </tr>
           </thead>
           <tbody>
-            {#each matches as match (match.matchId)}
+            {#each matches as match, index (index)}
               <tr>
                 <td class="l" title={dateTime(match.finishedAt)}>{timeAgo(match.finishedAt, now)}</td>
                 <td class="l">{match.map}</td>

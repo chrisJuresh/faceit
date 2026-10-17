@@ -9,7 +9,7 @@
   import OwnerAccess from '$lib/components/OwnerAccess.svelte';
   import PlayerTable from '$lib/components/PlayerTable.svelte';
   import { isActive } from '$lib/columns';
-  import { dateTime } from '$lib/format';
+  import { dateTime, timeAgo } from '$lib/format';
   import { LivePoll } from '$lib/live-poll.svelte';
   import { onMount } from 'svelte';
   import type { ActionData, PageData } from './$types';
@@ -18,6 +18,9 @@
 
   let theme = $state<'light' | 'dark'>('dark');
   let refreshing = $state(false);
+  // Starts at the data's own timestamp so the server render and hydration agree, then ticks.
+  // svelte-ignore state_referenced_locally
+  let clock = $state(data.squad?.generatedAt ?? data.live?.generatedAt ?? 0);
 
   // svelte-ignore state_referenced_locally
   const poll = new LivePoll(data.live);
@@ -40,7 +43,14 @@
 
   onMount(() => {
     theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
-    return poll.start();
+    const tick = () => (clock = Math.floor(Date.now() / 1000));
+    tick();
+    const timer = setInterval(tick, 30_000);
+    const stop = poll.start();
+    return () => {
+      clearInterval(timer);
+      stop();
+    };
   });
 
   function toggleTheme() {
@@ -82,7 +92,9 @@
     </nav>
     <div class="tools">
       {#if squad}
-        <span class="updated">{refreshing ? 'Refreshing…' : `Updated ${dateTime(squad.generatedAt)}`}</span>
+        <span class="updated" title={dateTime(squad.generatedAt)}>
+          {refreshing ? 'Refreshing…' : `Updated ${timeAgo(squad.generatedAt, Math.max(clock, squad.generatedAt))}`}
+        </span>
         <button class="text-button" type="button" onclick={refresh} disabled={refreshing}>Refresh</button>
       {/if}
       <button class="text-button" type="button" onclick={toggleTheme}>
@@ -96,6 +108,7 @@
   <LiveSection
     overview={poll.overview}
     failed={poll.failed}
+    now={clock}
     players={squad?.players ?? []}
     games={squad?.games ?? []}
   />

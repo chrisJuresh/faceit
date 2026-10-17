@@ -159,7 +159,7 @@
           {#if view === 'overview'}
             <td class="l first">
               <span class="results" aria-label="Last {Math.min(10, player.recent.length)} results">
-                {#each player.recent.slice(0, 10) as match (match.matchId)}<i class:win={match.won}></i>{/each}
+                {#each player.recent.slice(0, 10) as match, index (index)}<i class:win={match.won}></i>{/each}
               </span>
             </td>
             <td class="last">{player.lastMatchAt ? timeAgo(player.lastMatchAt, now) : '—'}</td>
