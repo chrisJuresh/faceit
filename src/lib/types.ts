@@ -208,8 +208,20 @@ export interface SquadOverview {
   lineups: GroupLineup[];
   together: { matches: number; wins: number };
   pairs: PairRecord[];
-  /** Matches per player per week, oldest week first, and per weekday (UTC), Monday first. */
-  activity: { weekStarts: number[]; rows: Array<{ playerId: string; counts: number[]; weekdays: number[] }> };
+  /** Matches per player per day and per week (UTC), oldest first. */
+  activity: {
+    dayStarts: number[];
+    weekStarts: number[];
+    rows: Array<{ playerId: string; days: number[]; weeks: number[] }>;
+  };
+}
+
+/** Matches per player per month and per year (UTC), oldest first, from each full CS2 history. */
+export interface LongActivity {
+  generatedAt: number;
+  monthStarts: number[];
+  yearStarts: number[];
+  rows: Array<{ playerId: string; months: number[]; years: number[] }>;
 }
 
 export type LivePhase = 'live' | 'setup' | 'finished' | 'cancelled';

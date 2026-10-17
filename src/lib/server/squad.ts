@@ -7,7 +7,7 @@ import {
   summarize,
   toLineup,
   toPlayerMatch,
-  weeklyActivity,
+  recentActivity,
   type HistoryMatch
 } from '$lib/stats';
 import type { LifetimeStats, MapStats, SquadOverview, SquadPlayer } from '$lib/types';
@@ -40,6 +40,7 @@ const PAGE_SIZE = 100;
 const MAX_PAGES = 3;
 const RECENT_MATCHES = 30;
 const GROUP_GAMES = 40;
+const ACTIVITY_DAYS = 14;
 const ACTIVITY_WEEKS = 13;
 
 type Stats = Record<string, string | number | null | string[]>;
@@ -284,19 +285,20 @@ async function buildPlayer(
   return { player, matches };
 }
 
-export async function buildSquad(): Promise<SquadOverview> {
+/** The owner and every friend with a CS2 profile. */
+export async function squadProfiles() {
   const owner = await getPlayerByNickname(OWNER_NICKNAME);
   const friendIds = [...new Set(owner.friends_ids || [])].filter((id) => id !== owner.player_id);
-  const now = Math.floor(Date.now() / 1000);
-
-  const [friends, aliases] = await Promise.all([
-    mapWithConcurrency(friendIds, 6, (id) => getPlayer(id).catch(() => null)),
-    readAliases()
-  ]);
-
+  const friends = await mapWithConcurrency(friendIds, 6, (id) => getPlayer(id).catch(() => null));
   const profiles = [owner, ...friends].filter(
     (profile): profile is FaceitPlayer => profile !== null && Boolean(profile.games?.cs2)
   );
+  return { owner, profiles };
+}
+
+export async function buildSquad(): Promise<SquadOverview> {
+  const now = Math.floor(Date.now() / 1000);
+  const [{ owner, profiles }, aliases] = await Promise.all([squadProfiles(), readAliases()]);
 
   const built = await mapWithConcurrency(profiles, 4, (profile) =>
     buildPlayer(profile, owner.player_id, aliases[profile.player_id], now)
@@ -323,6 +325,6 @@ export async function buildSquad(): Promise<SquadOverview> {
     lineups: games.map(toLineup),
     together: { matches: games.length, wins: games.filter((game) => game.won).length },
     pairs: pairRecords(games),
-    activity: weeklyActivity(histories, ACTIVITY_WEEKS, now)
+    activity: recentActivity(histories, ACTIVITY_DAYS, ACTIVITY_WEEKS, now)
   };
 }
