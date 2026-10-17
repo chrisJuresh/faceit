@@ -12,6 +12,8 @@
     type Scope,
     type View
   } from '$lib/columns';
+  import { replaceState } from '$app/navigation';
+  import { playerAnchor, playerHash } from '$lib/anchors';
   import { age, aroundOne } from '$lib/format';
   import type { SquadPlayer } from '$lib/types';
   import Avatar from './Avatar.svelte';
@@ -26,14 +28,21 @@
     players,
     now,
     isOwner = false,
-    liveIds = new Set<string>()
-  }: { players: SquadPlayer[]; now: number; isOwner?: boolean; liveIds?: Set<string> } = $props();
+    liveIds = new Set<string>(),
+    openId = $bindable(null)
+  }: {
+    players: SquadPlayer[];
+    now: number;
+    isOwner?: boolean;
+    liveIds?: Set<string>;
+    /** The player whose detail is open. */
+    openId?: string | null;
+  } = $props();
 
   let view = $state<View>('core');
   let chosenScope = $state<Scope>('last30');
   let sortKey = $state('kd');
   let direction = $state<'asc' | 'desc'>('desc');
-  let openId = $state<string | null>(null);
   /** The detail chart's metric, kept when another player is opened. */
   let formMetric = $state<FormMetric>('adr');
 
@@ -81,7 +90,11 @@
   const tone = (column: Column, player: SquadPlayer) =>
     column.aroundOne ? aroundOne(column.value(player, scope), column.digits) : '';
 
-  const toggle = (player: SquadPlayer) => (openId = openId === player.playerId ? null : player.playerId);
+  /** Opens or closes a player, keeping the address on the open one so it can be shared. */
+  function toggle(player: SquadPlayer) {
+    openId = openId === player.playerId ? null : player.playerId;
+    replaceState(openId ? playerHash(player) : location.pathname + location.search, {});
+  }
 </script>
 
 <div class="section-head">
@@ -145,7 +158,7 @@
         {#each rows as player (player.playerId)}
           {@const open = openId === player.playerId}
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-          <tr class="row" class:open class:low={isLowSample(player, view, scope)} onclick={() => toggle(player)}>
+          <tr id={playerAnchor(player)} class="row" class:open class:low={isLowSample(player, view, scope)} onclick={() => toggle(player)}>
             <th class="l stick" scope="row">
               <span class="who">
                 <Avatar src={player.avatar} name={player.displayName} />

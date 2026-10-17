@@ -10,10 +10,11 @@
   import Divider from '$lib/components/Divider.svelte';
   import PlayerTable from '$lib/components/PlayerTable.svelte';
   import Tooltip from '$lib/components/Tooltip.svelte';
-  import { isActive } from '$lib/columns';
+  import { playerAnchor, playerFromHash, playerHash } from '$lib/anchors';
+  import { isActive, sortByName } from '$lib/columns';
   import { dateTime, timeAgo } from '$lib/format';
   import { LivePoll } from '$lib/live-poll.svelte';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import type { ActionData, PageData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -21,6 +22,8 @@
   let theme = $state<'light' | 'dark'>('dark');
   let everyone = $state(false);
   let refreshing = $state(false);
+  /** The player whose detail is open in the table. */
+  let openId = $state<string | null>(null);
   // Starts at the data's own timestamp so the server render and hydration agree, then ticks.
   // svelte-ignore state_referenced_locally
   let clock = $state(data.squad?.generatedAt ?? data.live?.generatedAt ?? 0);
@@ -32,6 +35,7 @@
   const players = $derived(squad?.players ?? []);
   const byId = $derived(new Map(players.map((player) => [player.playerId, player])));
   const activeCount = $derived(players.filter(isActive).length);
+  const byName = $derived(sortByName(players, 'asc'));
   /** The masthead's Active / All choice applies to every per-player view. */
   const shown = $derived(everyone ? players : players.filter(isActive));
   const liveIds = $derived(
@@ -56,11 +60,34 @@
     tick();
     const timer = setInterval(tick, 30_000);
     const stop = poll.start();
+    void openFromHash();
+    window.addEventListener('hashchange', openFromHash);
     return () => {
       clearInterval(timer);
       stop();
+      window.removeEventListener('hashchange', openFromHash);
     };
   });
+
+  /** Opens and scrolls to the player a `#player-<nickname>` address names, showing everyone if they're inactive. */
+  async function openFromHash() {
+    const player = playerFromHash(location.hash, players);
+    if (!player) return;
+    if (!isActive(player)) everyone = true;
+    openId = player.playerId;
+    await tick();
+    document.getElementById(playerAnchor(player))?.scrollIntoView({ block: 'start' });
+  }
+
+  function jump(event: Event & { currentTarget: HTMLSelectElement }) {
+    const player = byId.get(event.currentTarget.value);
+    event.currentTarget.value = '';
+    if (!player) return;
+    const hash = playerHash(player);
+    // Choosing the player already in the address fires no hashchange.
+    if (location.hash === hash) void openFromHash();
+    else location.hash = hash;
+  }
 
   function setTheme(next: 'light' | 'dark') {
     theme = next;
@@ -94,10 +121,32 @@
       {#if squad}
         <a href="#players">Players</a>
         <a href="#maps">Maps</a>
+        <a href="#elo">ELO</a>
+        <a href="#activity">Activity</a>
         <a href="#games">Games</a>
         <a href="#duos">Duos</a>
       {/if}
     </nav>
+    {#if players.length}
+      <label class="jump">
+        <span class="sr-only">Jump to player</span>
+        <select class="input" onchange={jump}>
+          <option value="">Jump to player</option>
+          <optgroup label="Active">
+            {#each byName.filter(isActive) as player (player.playerId)}
+              <option value={player.playerId}>{player.displayName}</option>
+            {/each}
+          </optgroup>
+          {#if activeCount < players.length}
+            <optgroup label="Inactive">
+              {#each byName.filter((player) => !isActive(player)) as player (player.playerId)}
+                <option value={player.playerId}>{player.displayName}</option>
+              {/each}
+            </optgroup>
+          {/if}
+        </select>
+      </label>
+    {/if}
     <div class="tools">
       {#if squad}
         <span class="stamp" title={dateTime(squad.generatedAt)}>
@@ -131,7 +180,7 @@
 <main class="wrap">
   {#if squad}
     <section id="players" class="section">
-      <PlayerTable players={shown} {now} isOwner={data.isOwner} {liveIds} />
+      <PlayerTable players={shown} {now} isOwner={data.isOwner} {liveIds} bind:openId />
     </section>
 
     <section id="maps" class="section">
@@ -140,14 +189,14 @@
 
     <!-- Full sections in their own right, with the same heading and spacing as the rest. -->
     <div class="pair section">
-      <section aria-labelledby="elo-head">
+      <section id="elo" aria-labelledby="elo-head">
         <div class="section-head">
           <h2 id="elo-head">ELO</h2>
           <span class="meta"><i class="lead-key" aria-hidden="true"></i>To next level</span>
         </div>
         <EloLadder players={shown} />
       </section>
-      <section aria-labelledby="activity-head">
+      <section id="activity" aria-labelledby="activity-head">
         <div class="section-head">
           <h2 id="activity-head">Activity</h2>
           <span class="meta">Matches per week</span>
@@ -231,6 +280,24 @@
   }
 
   nav a:hover {
+    color: var(--ink);
+  }
+
+  .jump select {
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 12.5px;
+    max-width: 180px;
+  }
+
+  .jump select:hover,
+  .jump select:focus {
+    color: var(--ink);
+  }
+
+  .jump option,
+  .jump optgroup {
+    background: var(--page);
     color: var(--ink);
   }
 
