@@ -208,8 +208,8 @@ export interface SquadOverview {
   lineups: GroupLineup[];
   together: { matches: number; wins: number };
   pairs: PairRecord[];
-  /** Matches per player per week, oldest week first. */
-  activity: { weekStarts: number[]; rows: Array<{ playerId: string; counts: number[] }> };
+  /** Matches per player per week, oldest week first, and per weekday (UTC), Monday first. */
+  activity: { weekStarts: number[]; rows: Array<{ playerId: string; counts: number[]; weekdays: number[] }> };
 }
 
 export type LivePhase = 'live' | 'setup' | 'finished' | 'cancelled';
