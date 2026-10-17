@@ -10,7 +10,7 @@ One page, top to bottom:
 2. **Highlights** (planned). Clips extracted from match demos will sit here: one main highlight per game and one per player per game.
 3. **Players.** Every player's FACEIT numbers in one sortable table (K/D first), switchable between their last 10, 30 or 100 matches and FACEIT's lifetime record, with a detail view per player.
 4. **Maps.** One grid of each player's record per map, switchable between their last 30 or 90 matches and FACEIT's lifetime record, with the group's record together over the same span as the top row: their last 30 or 90 games together, or every game together in the players' histories. Each player who played with the group has a tick by their name; untick them to leave them out of that row. A player's map cell stays uncoloured under 3 matches for the last 30, 5 for the last 90 and 10 for lifetime, and a Together cell under 5 games.
-5. **ELO, activity, games and duos.** Each player's ELO against FACEIT's level bands and their matches per week, the games played together, and duo records.
+5. **ELO, activity, games and duos.** Each player's ELO against FACEIT's level bands and their matches per day, week, month or year, the games played together, and duo records.
 
 The masthead's Active / All switch applies to every per-player view.
 
@@ -22,7 +22,8 @@ Only numbers FACEIT publishes are shown, or plain arithmetic on them (totals, ra
 | --- | --- | --- |
 | Profile, ELO, level, friends | `/players`, `/players/{id}` | Who is in the group, current ELO and level, Steam and FACEIT links |
 | Lifetime record | `/players/{id}/stats/cs2` | Lifetime columns, entry/clutch/utility/flash rates, lifetime per-map records |
-| Per-match stats | `/players/{id}/games/cs2/stats` | Last 10/30/100 summaries, last 30/90 per-map records, recent matches, games together, duos, activity |
+| Per-match stats | `/players/{id}/games/cs2/stats` | Last 10/30/100 summaries, last 30/90 per-map records, recent matches, games together, duos, daily and weekly activity |
+| Match history | `/players/{id}/history` | Monthly and yearly activity, read only when Months or Years is picked |
 | Ladder position | `/rankings/games/cs2/regions/{region}/players/{id}` | Regional and national rank (FACEIT leaves inactive players unranked) |
 | Match room and stats | `/matches/{id}`, `/matches/{id}/stats` | Live and finished match boards |
 
@@ -31,7 +32,8 @@ Notes on FACEIT's fields:
 - Lifetime `K/D Ratio` and `Total Headshots %` are running sums, so Stackline uses `Average K/D Ratio` and `Average Headshots %`. Lifetime K/R is total kills over total rounds across the 5v5 map records.
 - Last-N summaries, per-map ones included, are totals, not averages of per-match ratios: K/D is kills over deaths, ADR is damage over rounds, HS% is headshot kills over kills. Lifetime per-map K/D is FACEIT's `Average K/D Ratio`, a mean of per-match ratios, so it reads a little differently from the last 30/90 per-map K/D.
 - Wingman and 1v1 matches are left out. Two friends count as teammates in a match when FACEIT lists them on the same team.
-- Group numbers (games together, duos, activity) cover the last 90 days; the Maps Together row reads whole histories. Each player's history is read up to 1,500 matches. FACEIT refuses offsets past 200, so pages after the first are fetched with a `to` cursor at the oldest match seen so far.
+- Group numbers (games together, duos, daily and weekly activity) cover the last 90 days; the Maps Together row reads whole histories. Each player's match stats are read up to 1,500 matches. FACEIT refuses offsets past 200, so pages after the first are fetched with a `to` cursor at the oldest match seen so far.
+- Monthly and yearly activity walk each player's whole CS2 match history (up to 3,000 matches), counting one per match rather than per map, and keep the result for 30 minutes. All activity is bucketed in UTC.
 - FACEIT allows 20 requests per second per key. Requests are throttled to stay under it, and results are cached in memory, with stale values served while a background refresh runs.
 
 ## Live matches

@@ -8,7 +8,9 @@ import {
   toPlayerMatch,
   togetherMaps,
   weekStart,
-  weeklyActivity,
+  longActivity,
+  monthStarts,
+  recentActivity,
   type HistoryMatch
 } from './stats';
 
@@ -192,30 +194,49 @@ describe('weekly activity', () => {
     expect(new Date(weekStart(saturday) * 1000).toISOString()).toBe('2026-10-12T00:00:00.000Z');
   });
 
-  it('buckets matches into weeks, oldest first', () => {
+  it('buckets matches into days and weeks, oldest first', () => {
     const now = Date.UTC(2026, 9, 17, 15) / 1000;
     const thisWeek = weekStart(now) + DAY;
     const lastWeek = thisWeek - 7 * DAY;
     const tooOld = thisWeek - 30 * DAY;
-    const { weekStarts, rows } = weeklyActivity(
+    const { dayStarts, weekStarts, rows } = recentActivity(
       [{ playerId: 'a', matches: [match({ finishedAt: thisWeek }), match({ finishedAt: lastWeek }), match({ finishedAt: tooOld })] }],
+      14,
       3,
       now
     );
     expect(weekStarts).toHaveLength(3);
-    expect(rows[0].counts).toEqual([0, 1, 1]);
+    expect(rows[0].weeks).toEqual([0, 1, 1]);
+    // Today is Saturday 17 Oct, so the 14 days start on Sunday 4 Oct.
+    expect(new Date(dayStarts[0] * 1000).toISOString()).toBe('2026-10-04T00:00:00.000Z');
+    expect(rows[0].days.reduce((sum, count) => sum + count, 0)).toBe(2);
+    expect(rows[0].days[dayStarts.indexOf(thisWeek)]).toBe(1);
+  });
+});
+
+describe('long activity', () => {
+  it('counts back months across a new year', () => {
+    const now = Date.UTC(2026, 1, 10) / 1000;
+    expect(monthStarts(3, now).map((start) => new Date(start * 1000).toISOString().slice(0, 7))).toEqual([
+      '2025-12',
+      '2026-01',
+      '2026-02'
+    ]);
   });
 
-  it('counts matches per weekday, Monday first', () => {
-    const now = Date.UTC(2026, 9, 17, 15) / 1000;
-    const monday = weekStart(now);
-    const tuesday = monday + DAY + 3600;
-    const lastSunday = monday - DAY + 23 * 3600;
-    const { rows } = weeklyActivity(
-      [{ playerId: 'a', matches: [match({ finishedAt: tuesday }), match({ finishedAt: tuesday - 7 * DAY }), match({ finishedAt: lastSunday })] }],
-      3,
+  it('counts per month and per year from the first match', () => {
+    const now = Date.UTC(2026, 9, 17) / 1000;
+    const { monthStarts: months, yearStarts: years, rows } = longActivity(
+      [
+        { playerId: 'a', matches: [{ finishedAt: Date.UTC(2026, 9, 2) / 1000 }, { finishedAt: Date.UTC(2024, 4, 1) / 1000 }] },
+        { playerId: 'b', matches: [{ finishedAt: Date.UTC(2026, 8, 30) / 1000 }] }
+      ],
+      2,
       now
     );
-    expect(rows[0].weekdays).toEqual([0, 2, 0, 0, 0, 0, 1]);
+    expect(months).toHaveLength(2);
+    expect(years.map((start) => new Date(start * 1000).getUTCFullYear())).toEqual([2024, 2025, 2026]);
+    expect(rows[0]).toEqual({ playerId: 'a', months: [0, 1], years: [1, 0, 1] });
+    expect(rows[1]).toEqual({ playerId: 'b', months: [1, 0], years: [0, 0, 1] });
   });
 });

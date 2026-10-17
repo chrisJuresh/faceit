@@ -202,26 +202,84 @@ export function weekStart(timestamp: number) {
   return day - weekday * DAY;
 }
 
+/** Match finish times for one player, in any order. */
+export interface PlayerTimes {
+  playerId: string;
+  matches: Array<{ finishedAt: number }>;
+}
+
 /**
- * Matches played per player over the last `weeks` weeks: per week, oldest week first, and per
- * weekday (UTC), Monday first.
+ * Each player's matches counted into the periods that begin at `starts` (ascending, UTC). The last
+ * period runs on to now; matches before the first are left out.
  */
-export function weeklyActivity(players: PlayerMatches[], weeks: number, now: number) {
-  const current = weekStart(now);
-  const weekStarts = Array.from({ length: weeks }, (_, index) => current - (weeks - 1 - index) * 7 * DAY);
-  const first = weekStarts[0];
-
-  const rows = players.map((player) => {
-    const counts = weekStarts.map(() => 0);
-    const weekdays = Array.from({ length: 7 }, () => 0);
+export function countByPeriod(players: PlayerTimes[], starts: number[]) {
+  return players.map((player) => {
+    const counts = starts.map(() => 0);
     for (const match of player.matches) {
-      if (match.finishedAt < first) continue;
-      const index = Math.min(weeks - 1, Math.floor((match.finishedAt - first) / (7 * DAY)));
+      if (match.finishedAt < starts[0]) continue;
+      let index = starts.length - 1;
+      while (match.finishedAt < starts[index]) index -= 1;
       counts[index] += 1;
-      weekdays[Math.floor((match.finishedAt - first) / DAY) % 7] += 1;
     }
-    return { playerId: player.playerId, counts, weekdays };
+    return counts;
   });
+}
 
-  return { weekStarts, rows };
+/** 00:00 UTC of each of the last `count` days, oldest first, ending with today. */
+export function dayStarts(count: number, now: number) {
+  const today = Math.floor(now / DAY) * DAY;
+  return Array.from({ length: count }, (_, index) => today - (count - 1 - index) * DAY);
+}
+
+/** Monday 00:00 UTC of each of the last `count` weeks, oldest first, ending with this week. */
+export function weekStarts(count: number, now: number) {
+  const current = weekStart(now);
+  return Array.from({ length: count }, (_, index) => current - (count - 1 - index) * 7 * DAY);
+}
+
+/** The 1st, 00:00 UTC, of each of the last `count` months, oldest first, ending with this month. */
+export function monthStarts(count: number, now: number) {
+  const today = new Date(now * 1000);
+  return Array.from(
+    { length: count },
+    (_, index) => Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - (count - 1 - index), 1) / 1000
+  );
+}
+
+/** 1 January, 00:00 UTC, of each year from `firstYear` to this year. */
+export function yearStarts(firstYear: number, now: number) {
+  const thisYear = new Date(now * 1000).getUTCFullYear();
+  const from = Math.min(firstYear, thisYear);
+  return Array.from({ length: thisYear - from + 1 }, (_, index) => Date.UTC(from + index, 0, 1) / 1000);
+}
+
+/** Matches per player per day and per week over the latest `days` days and `weeks` weeks. */
+export function recentActivity(players: PlayerTimes[], days: number, weeks: number, now: number) {
+  const dayList = dayStarts(days, now);
+  const weekList = weekStarts(weeks, now);
+  const byDay = countByPeriod(players, dayList);
+  const byWeek = countByPeriod(players, weekList);
+  return {
+    dayStarts: dayList,
+    weekStarts: weekList,
+    rows: players.map((player, index) => ({ playerId: player.playerId, days: byDay[index], weeks: byWeek[index] }))
+  };
+}
+
+/**
+ * Matches per player per month over the latest `months` months, and per year from the year of the
+ * group's first match.
+ */
+export function longActivity(players: PlayerTimes[], months: number, now: number) {
+  let first = now;
+  for (const player of players) for (const match of player.matches) first = Math.min(first, match.finishedAt);
+  const monthList = monthStarts(months, now);
+  const yearList = yearStarts(new Date(first * 1000).getUTCFullYear(), now);
+  const byMonth = countByPeriod(players, monthList);
+  const byYear = countByPeriod(players, yearList);
+  return {
+    monthStarts: monthList,
+    yearStarts: yearList,
+    rows: players.map((player, index) => ({ playerId: player.playerId, months: byMonth[index], years: byYear[index] }))
+  };
 }
