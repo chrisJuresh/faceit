@@ -1,4 +1,6 @@
 import type {
+  DuelLine,
+  DuelSummary,
   GameLine,
   GroupGame,
   GroupLineup,
@@ -99,6 +101,41 @@ export function mapForm(matches: HistoryMatch[]): MapForm[] {
       return { map, matches, wins, winRate, kd, adr };
     })
     .sort((a, b) => b.matches - a.matches || a.map.localeCompare(b.map));
+}
+
+/**
+ * Duel and utility rates over `lines`, totalled the same way as `summarize`: entry success is
+ * opening duels won over opening duels taken, not an average of each match's rate. A rate with
+ * nothing under it (no 1v2s, say) is null.
+ */
+export function summarizeDuels(lines: DuelLine[]): DuelSummary | null {
+  if (!lines.length) return null;
+  const sum = (pick: (line: DuelLine) => number) => lines.reduce((total, line) => total + pick(line), 0);
+  const rate = (top: number, bottom: number) => (bottom ? (top / bottom) * 100 : null);
+
+  const rounds = sum((line) => line.rounds);
+  const perRound = (value: number) => (rounds ? value / rounds : null);
+  const entryCount = sum((line) => line.entryCount);
+  const clutch1v1Count = sum((line) => line.clutch1v1Count);
+  const clutch1v2Count = sum((line) => line.clutch1v2Count);
+  const utilityCount = sum((line) => line.utilityCount);
+  const flashCount = sum((line) => line.flashCount);
+
+  return {
+    matches: lines.length,
+    entryRate: rate(entryCount, rounds),
+    entrySuccess: rate(sum((line) => line.entryWins), entryCount),
+    clutch1v1: rate(sum((line) => line.clutch1v1Wins), clutch1v1Count),
+    clutch1v1Count,
+    clutch1v2: rate(sum((line) => line.clutch1v2Wins), clutch1v2Count),
+    clutch1v2Count,
+    utilityDamagePerRound: perRound(sum((line) => line.utilityDamage)),
+    utilitySuccess: rate(sum((line) => line.utilitySuccesses), utilityCount),
+    flashSuccess: rate(sum((line) => line.flashSuccesses), flashCount),
+    flashesPerRound: perRound(flashCount),
+    enemiesFlashedPerRound: perRound(sum((line) => line.enemiesFlashed)),
+    sniperKillShare: rate(sum((line) => line.sniperKills), sum((line) => line.kills))
+  };
 }
 
 export const countSince =(matches: PlayerMatch[], since: number) =>

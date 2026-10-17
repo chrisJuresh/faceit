@@ -1,5 +1,5 @@
 import { thousands } from './format';
-import type { LifetimeStats, SquadPlayer, Summary } from './types';
+import type { DuelSummary, LifetimeStats, SquadPlayer, Summary } from './types';
 
 export type Scope = 'last10' | 'last30' | 'last100' | 'lifetime';
 export type View = 'core' | 'duels';
@@ -28,7 +28,7 @@ export interface Column {
   /** A sample-size column beside a rate: always muted. */
   isSample?: boolean;
   /** The value is muted when this sample is under 10. */
-  sample?: (player: SquadPlayer) => number | null;
+  sample?: (player: SquadPlayer, scope: Scope) => number | null;
   /** Drawn by the table as the last-10 result strip; not sortable. */
   strip?: boolean;
   /** A timestamp, shown as its age. */
@@ -93,6 +93,31 @@ function lifetime(
     title,
     digits,
     value: (player) => (player.lifetime ? pick(player.lifetime) : null),
+    ...options
+  };
+}
+
+/** Lifetime reads FACEIT's lifetime record; recent scopes read the match-room summaries loaded with the duels view. */
+const duelStats = (player: SquadPlayer, scope: Scope): DuelSummary | null =>
+  scope === 'lifetime' ? player.lifetime : (player.duels?.[scope] ?? null);
+
+function duel(
+  key: string,
+  label: string,
+  title: string,
+  digits: number,
+  pick: (stats: DuelSummary) => number | null,
+  options: ColumnOptions = {}
+): Column {
+  return {
+    key,
+    label,
+    title,
+    digits,
+    value: (player, scope) => {
+      const stats = duelStats(player, scope);
+      return stats ? pick(stats) : null;
+    },
     ...options
   };
 }
@@ -190,58 +215,64 @@ const PLAYED: ColumnGroup = {
   ]
 };
 
-const DUELS: ColumnGroup[] = [
-  {
-    label: 'Lifetime',
-    columns: [lifetime('lifeMatches', 'M', 'Lifetime matches', 0, (l) => l.matches)]
-  },
+const DUEL_RATES: ColumnGroup[] = [
   {
     label: 'Entry',
     columns: [
-      lifetime('entryRate', 'Rate %', 'Rounds with an opening duel', 0, (l) => l.entryRate),
-      lifetime('entrySuccess', 'Success %', 'Opening duels won', 0, (l) => l.entrySuccess)
+      duel('entryRate', 'Rate %', 'Rounds with an opening duel', 0, (d) => d.entryRate),
+      duel('entrySuccess', 'Success %', 'Opening duels won', 0, (d) => d.entrySuccess)
     ]
   },
   {
     label: 'Clutch',
     columns: [
-      lifetime('clutch1v1', '1v1 %', '1v1 clutches won', 0, (l) => l.clutch1v1, {
-        sample: (p) => p.lifetime?.clutch1v1Count ?? null
+      duel('clutch1v1', '1v1 %', '1v1 clutches won', 0, (d) => d.clutch1v1, {
+        sample: (p, scope) => duelStats(p, scope)?.clutch1v1Count ?? null
       }),
-      lifetime('clutch1v1Count', 'n', '1v1 clutches played', 0, (l) => l.clutch1v1Count, { isSample: true }),
-      lifetime('clutch1v2', '1v2 %', '1v2 clutches won', 0, (l) => l.clutch1v2, {
-        sample: (p) => p.lifetime?.clutch1v2Count ?? null
+      duel('clutch1v1Count', 'n', '1v1 clutches played', 0, (d) => d.clutch1v1Count, { isSample: true }),
+      duel('clutch1v2', '1v2 %', '1v2 clutches won', 0, (d) => d.clutch1v2, {
+        sample: (p, scope) => duelStats(p, scope)?.clutch1v2Count ?? null
       }),
-      lifetime('clutch1v2Count', 'n', '1v2 clutches played', 0, (l) => l.clutch1v2Count, { isSample: true })
+      duel('clutch1v2Count', 'n', '1v2 clutches played', 0, (d) => d.clutch1v2Count, { isSample: true })
     ]
   },
   {
     label: 'Utility',
     columns: [
-      lifetime('utility', 'Dmg/rd', 'Utility damage per round', 1, (l) => l.utilityDamagePerRound),
-      lifetime('utilitySuccess', 'Success %', 'Utility that damaged or blinded an enemy', 0, (l) => l.utilitySuccess)
+      duel('utility', 'Dmg/rd', 'Utility damage per round', 1, (d) => d.utilityDamagePerRound),
+      duel('utilitySuccess', 'Success %', 'Utility that damaged or blinded an enemy', 0, (d) => d.utilitySuccess)
     ]
   },
   {
     label: 'Flash',
     columns: [
-      lifetime('flashSuccess', 'Success %', 'Flashes that blinded an enemy', 0, (l) => l.flashSuccess),
-      lifetime('flashes', 'Per rd', 'Flashes thrown per round', 2, (l) => l.flashesPerRound),
-      lifetime('blinded', 'Enemies/rd', 'Enemies blinded per round', 2, (l) => l.enemiesFlashedPerRound)
+      duel('flashSuccess', 'Success %', 'Flashes that blinded an enemy', 0, (d) => d.flashSuccess),
+      duel('flashes', 'Per rd', 'Flashes thrown per round', 2, (d) => d.flashesPerRound),
+      duel('blinded', 'Enemies/rd', 'Enemies blinded per round', 2, (d) => d.enemiesFlashedPerRound)
     ]
   },
   {
     label: 'Sniper',
-    columns: [lifetime('sniper', 'Kill %', 'Kills with a sniper rifle', 1, (l) => l.sniperKillShare)]
+    columns: [duel('sniper', 'Kill %', 'Kills with a sniper rifle', 1, (d) => d.sniperKillShare)]
   }
+];
+
+/** Duel columns, led by the matches behind them under the scope's own name. */
+const duelGroups = (scope: Scope): ColumnGroup[] => [
+  {
+    label: SCOPES.find((option) => option.key === scope)!.label,
+    columns: [duel('duelMatches', 'M', 'Matches counted', 0, (d) => d.matches)]
+  },
+  ...DUEL_RATES
 ];
 
 /**
  * Column groups after ELO. Recent scopes add per-match figures and multi-kills; lifetime adds
- * win streaks. Duel and utility numbers only exist in FACEIT's lifetime record.
+ * win streaks. Duel and utility numbers come from FACEIT's lifetime record, or for recent scopes
+ * from each match's room stats.
  */
 export function columnGroups(view: View, scope: Scope): ColumnGroup[] {
-  if (view === 'duels') return DUELS;
+  if (view === 'duels') return duelGroups(scope);
   const middle = scope === 'lifetime' ? [WIN_STREAK] : [PER_MATCH, MULTI_KILLS];
   return [RESULTS, FRAGGING, ...middle, FORM, PLAYED];
 }
@@ -281,8 +312,8 @@ export function sortByName(players: SquadPlayer[], direction: 'asc' | 'desc') {
 }
 
 /** Too few matches behind the numbers in view: the row is still shown, but muted. */
-export function isLowSample(player: SquadPlayer, view: View, scope: Scope) {
-  if (view === 'duels' || scope === 'lifetime') return (player.lifetime?.matches ?? 0) < 20;
+export function isLowSample(player: SquadPlayer, scope: Scope) {
+  if (scope === 'lifetime') return (player.lifetime?.matches ?? 0) < 20;
   return (player.form[scope]?.matches ?? 0) < 10;
 }
 

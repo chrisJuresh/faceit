@@ -60,7 +60,8 @@ describe('columns', () => {
   it('swaps per-match and multi-kill groups for win streaks in lifetime', () => {
     expect(keys('core', 'last10')).toEqual(['Results', 'Fragging', 'Per match', 'Multi-kills', 'Form', 'Played']);
     expect(keys('core', 'lifetime')).toEqual(['Results', 'Fragging', 'Win streak', 'Form', 'Played']);
-    expect(keys('duels', 'last10')).toEqual(['Lifetime', 'Entry', 'Clutch', 'Utility', 'Flash', 'Sniper']);
+    expect(keys('duels', 'last10')).toEqual(['Last 10', 'Entry', 'Clutch', 'Utility', 'Flash', 'Sniper']);
+    expect(keys('duels', 'lifetime')).toEqual(['Lifetime', 'Entry', 'Clutch', 'Utility', 'Flash', 'Sniper']);
   });
 
   it('reads the selected scope', () => {
@@ -81,9 +82,23 @@ describe('columns', () => {
 
   it('reads duel columns from the lifetime record with their sample size', () => {
     expect(column('entrySuccess').value(players[0], 'lifetime')).toBe(50);
-    expect(column('clutch1v1').sample?.(players[0])).toBe(30);
+    expect(column('clutch1v1').sample?.(players[0], 'lifetime')).toBe(30);
+    expect(column('duelMatches').value(players[0], 'lifetime')).toBe(100);
     expect(column('clutch1v1Count').value(players[0], 'lifetime')).toBe(30);
     expect(column('entrySuccess').value(players[2], 'lifetime')).toBeNull();
+  });
+
+  it('reads recent duel columns from the summaries loaded with the view', () => {
+    const recent = {
+      ...players[0],
+      duels: { last10: { ...players[0].lifetime!, matches: 10, entrySuccess: 70, clutch1v1Count: 4 }, last30: null, last100: null }
+    } as SquadPlayer;
+    expect(column('entrySuccess').value(recent, 'last10')).toBe(70);
+    expect(column('duelMatches').value(recent, 'last10')).toBe(10);
+    expect(column('clutch1v1').sample?.(recent, 'last10')).toBe(4);
+    expect(column('entrySuccess').value(recent, 'last30')).toBeNull();
+    // Not loaded yet: unknown, never the lifetime figure.
+    expect(column('entrySuccess').value(players[0], 'last10')).toBeNull();
   });
 
   it('sorts both ways and keeps empty values last', () => {
@@ -108,8 +123,9 @@ describe('columns', () => {
 
   it('mutes rows with too few matches behind them', () => {
     const few = { ...player('few', 1, 1), form: { last10: summary(1, 4), last30: null, last100: null } } as SquadPlayer;
-    expect(isLowSample(few, 'core', 'last10')).toBe(true);
-    expect(isLowSample(players[0], 'core', 'last10')).toBe(false);
-    expect(isLowSample(players[2], 'duels', 'last10')).toBe(true);
+    expect(isLowSample(few, 'last10')).toBe(true);
+    expect(isLowSample(players[0], 'last10')).toBe(false);
+    expect(isLowSample(players[2], 'lifetime')).toBe(true);
+    expect(isLowSample(players[0], 'lifetime')).toBe(false);
   });
 });

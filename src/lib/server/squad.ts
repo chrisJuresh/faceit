@@ -196,9 +196,9 @@ export function parseLifetime(stats: FaceitLifetimeStats | null, maps: MapStats[
  * A player's match history, newest first. Each older page asks for matches up to the oldest one
  * seen so far, since FACEIT refuses offsets past 200. `readFrom` is how far back the history is
  * complete: null when it was read to the start, otherwise the oldest time read, because the page
- * cap was hit or an older page failed.
+ * cap was hit, an older page failed, or `want` 5v5 matches were already in.
  */
-async function matchHistory(playerId: string) {
+export async function matchHistory(playerId: string, want = Infinity) {
   const matches: HistoryMatch[] = [];
   const seen = new Set<string>();
   let readFrom: number | null = null;
@@ -228,7 +228,7 @@ async function matchHistory(playerId: string) {
     if (items.length < PAGE_SIZE || seen.size === known) break;
     const oldestStats = items[items.length - 1].stats as Stats;
     const oldest = timestamp(oldestStats);
-    if (page === MAX_PAGES - 1) {
+    if (page === MAX_PAGES - 1 || matches.length >= want) {
       readFrom = oldest;
       break;
     }

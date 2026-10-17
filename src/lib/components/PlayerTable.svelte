@@ -14,8 +14,8 @@
   } from '$lib/columns';
   import { replaceState } from '$app/navigation';
   import { playerAnchor, playerHash } from '$lib/anchors';
-  import { age, aroundOne } from '$lib/format';
-  import type { SquadPlayer } from '$lib/types';
+  import { age, aroundOne, thousands } from '$lib/format';
+  import type { RecentDuels, SquadPlayer } from '$lib/types';
   import Avatar from './Avatar.svelte';
   import Chevron from './Chevron.svelte';
   import Divider from './Divider.svelte';
@@ -40,14 +40,50 @@
   } = $props();
 
   let view = $state<View>('core');
-  let chosenScope = $state<Scope>('last30');
+  let scope = $state<Scope>('last30');
   let sortKey = $state('kd');
   let direction = $state<'asc' | 'desc'>('desc');
   /** The detail chart's metric, kept when another player is opened. */
   let formMetric = $state<FormMetric>('adr');
+  let duels = $state<RecentDuels | null>(null);
+  let duelsState = $state<'idle' | 'loading' | 'failed'>('idle');
 
-  // Duel and utility numbers only exist in FACEIT's lifetime record.
-  const scope = $derived<Scope>(view === 'duels' ? 'lifetime' : chosenScope);
+  /**
+   * Recent duel numbers come from each match's own stats, read on the server only when asked for.
+   * A cold read takes more than one request, so ask again until it finishes or stops moving.
+   */
+  async function loadDuels() {
+    duelsState = 'loading';
+    try {
+      let read = -1;
+      for (;;) {
+        const response = await fetch('/api/duels');
+        if (!response.ok) throw new Error(`Duels returned ${response.status}`);
+        const next = (await response.json()) as RecentDuels;
+        duels = next;
+        if (next.complete || next.read <= read) break;
+        read = next.read;
+      }
+      duelsState = 'idle';
+    } catch {
+      duelsState = 'failed';
+    }
+  }
+
+  function show(nextView: View, nextScope: Scope) {
+    view = nextView;
+    scope = nextScope;
+    if (view === 'duels' && scope !== 'lifetime' && !duels?.complete && duelsState !== 'loading') loadDuels();
+  }
+
+  /** Players with their recent duel summaries, once read. */
+  const shown = $derived.by(() => {
+    const recent = duels?.players;
+    return recent ? players.map((player) => ({ ...player, duels: recent[player.playerId] })) : players;
+  });
+  const duelsNote = $derived(
+    view === 'duels' && scope !== 'lifetime' && (duelsState !== 'idle' || (duels !== null && duels.read < duels.total))
+  );
   const groups = $derived(columnGroups(view, scope));
   const columns = $derived(allColumns(groups));
   /** Column keys that start a group, for the wider gap in front of them. */
@@ -59,9 +95,9 @@
       : { key: 'elo', direction: 'desc' as const }
   );
   const rows = $derived.by(() => {
-    if (sorting.key === 'name') return sortByName(players, sorting.direction);
+    if (sorting.key === 'name') return sortByName(shown, sorting.direction);
     const column = columns.find((entry) => entry.key === sorting.key) ?? ELO;
-    return sortPlayers(players, column, scope, sorting.direction);
+    return sortPlayers(shown, column, scope, sorting.direction);
   });
 
   function sortBy(key: string) {
@@ -83,7 +119,7 @@
     if (column.isSample) return true;
     const value = column.value(player, scope);
     if (column.quietZero && value === 0) return true;
-    const sample = column.sample?.(player);
+    const sample = column.sample?.(player, scope);
     return sample !== undefined && sample !== null && sample < 10;
   }
 
@@ -99,21 +135,31 @@
 
 <div class="section-head">
   <h2>Players</h2>
+  {#if duelsNote}
+    <span class="meta">
+      {#if duelsState === 'failed'}
+        FACEIT isn't responding
+        <button class="text-button" type="button" onclick={loadDuels}>Try again</button>
+      {:else if duelsState === 'loading'}
+        Reading match stats{#if duels}, <span class="mono">{thousands(duels.read)}</span> of
+          <span class="mono">{thousands(duels.total)}</span> matches{/if}…
+      {:else if duels}
+        <span class="mono">{thousands(duels.total - duels.read)}</span> matches couldn't be read
+      {/if}
+    </span>
+  {/if}
   <div class="controls">
     <div class="seg" role="group" aria-label="Matches counted">
       {#each SCOPES as option (option.key)}
-        <button
-          type="button"
-          aria-pressed={scope === option.key}
-          disabled={view === 'duels' && option.key !== 'lifetime'}
-          onclick={() => (chosenScope = option.key)}>{option.label}</button
+        <button type="button" aria-pressed={scope === option.key} onclick={() => show(view, option.key)}
+          >{option.label}</button
         >
       {/each}
     </div>
     <Divider />
     <div class="seg" role="group" aria-label="Columns">
-      <button type="button" aria-pressed={view === 'core'} onclick={() => (view = 'core')}>Core</button>
-      <button type="button" aria-pressed={view === 'duels'} onclick={() => (view = 'duels')}>Duels &amp; utility</button>
+      <button type="button" aria-pressed={view === 'core'} onclick={() => show('core', scope)}>Core</button>
+      <button type="button" aria-pressed={view === 'duels'} onclick={() => show('duels', scope)}>Duels &amp; utility</button>
     </div>
   </div>
 </div>
@@ -158,7 +204,7 @@
         {#each rows as player (player.playerId)}
           {@const open = openId === player.playerId}
           <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-          <tr id={playerAnchor(player)} class="row" class:open class:low={isLowSample(player, view, scope)} onclick={() => toggle(player)}>
+          <tr id={playerAnchor(player)} class="row" class:open class:low={isLowSample(player, scope)} onclick={() => toggle(player)}>
             <th class="l stick" scope="row">
               <span class="who">
                 <Avatar src={player.avatar} name={player.displayName} />
