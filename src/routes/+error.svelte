@@ -2,50 +2,40 @@
   import { page } from '$app/state';
 </script>
 
-<svelte:head><title>Something went wrong · Stackline</title></svelte:head>
+<svelte:head><title>{page.status} · Stackline</title></svelte:head>
 
 <main>
-  <div class="mark">S/</div>
-  <p>{page.status}</p>
-  <h1>That round did not go to plan.</h1>
-  <span>{page.error?.message || 'An unexpected error occurred.'}</span>
-  <a href="/">Return to dashboard</a>
+  <p class="status">{page.status}</p>
+  <h1>{page.status === 404 ? 'Page not found' : 'Something went wrong'}</h1>
+  {#if page.error?.message && page.status !== 404}<p>{page.error.message}</p>{/if}
+  <a href="/">Back to Stackline</a>
 </main>
 
 <style>
-  :global(body) {
-    background: #0b0b0c;
-    color: #f4f1eb;
-    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  main {
+    margin: 0 auto;
+    max-width: 36rem;
+    padding: 6rem 1.25rem;
+  }
+
+  .status {
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
     margin: 0;
   }
-  main {
-    display: grid;
-    min-height: 100vh;
-    place-content: center;
-    padding: 2rem;
-    text-align: center;
-  }
-  .mark {
-    color: #ff5c35;
-    font-size: 2rem;
-    font-weight: 900;
-  }
-  p {
-    color: #ff5c35;
-    font-family: ui-monospace, monospace;
-    margin-bottom: 0;
-  }
+
   h1 {
-    font-size: clamp(2rem, 5vw, 4rem);
-    letter-spacing: -0.05em;
-    margin: 0.5rem 0;
+    color: var(--text-1);
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0.25rem 0 0.75rem;
   }
-  span {
-    color: #9c9993;
+
+  p {
+    color: var(--text-2);
   }
+
   a {
-    color: #f4f1eb;
-    margin-top: 2rem;
+    color: var(--text-1);
   }
 </style>
