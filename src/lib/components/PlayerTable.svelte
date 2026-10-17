@@ -31,7 +31,7 @@
 
   let view = $state<View>('core');
   let chosenScope = $state<Scope>('last30');
-  let sortKey = $state('elo');
+  let sortKey = $state('kd');
   let direction = $state<'asc' | 'desc'>('desc');
   let openId = $state<string | null>(null);
   /** The detail chart's metric, kept when another player is opened. */

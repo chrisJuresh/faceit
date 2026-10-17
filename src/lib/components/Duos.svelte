@@ -94,6 +94,12 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  /* The Players table's row height, so the two lists read at the same density. */
+  .mini th,
+  .mini td {
+    height: 32px;
+  }
+
   .pair {
     align-items: baseline;
     display: inline-flex;

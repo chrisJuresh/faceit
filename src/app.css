@@ -67,9 +67,15 @@
   --mono: 'Chivo Mono Variable', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
   --wordmark: 'Archivo Variable', var(--sans);
   --gutter: 32px;
-  --max: 1320px;
+  --max: 1920px;
   /* The background a table cell sits on; bands and open rows override it. */
   --surface: var(--page);
+}
+
+@media (min-width: 1440px) {
+  :root {
+    --gutter: 48px;
+  }
 }
 
 @media (max-width: 640px) {

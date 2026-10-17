@@ -132,24 +132,25 @@
   {#if squad}
     <section id="players" class="section">
       <PlayerTable players={shown} {now} isOwner={data.isOwner} {liveIds} />
-
-      <div class="pair">
-        <section aria-labelledby="elo-head">
-          <div class="sub-head">
-            <h3 id="elo-head">ELO</h3>
-            <span class="meta"><i class="lead-key" aria-hidden="true"></i>To next level</span>
-          </div>
-          <EloLadder players={shown} />
-        </section>
-        <section aria-labelledby="activity-head">
-          <div class="sub-head">
-            <h3 id="activity-head">Activity</h3>
-            <span class="meta">Matches per week</span>
-          </div>
-          <Activity activity={squad.activity} players={shown} />
-        </section>
-      </div>
     </section>
+
+    <!-- Full sections in their own right, with the same heading and spacing as the rest. -->
+    <div class="pair section">
+      <section aria-labelledby="elo-head">
+        <div class="section-head">
+          <h2 id="elo-head">ELO</h2>
+          <span class="meta"><i class="lead-key" aria-hidden="true"></i>To next level</span>
+        </div>
+        <EloLadder players={shown} />
+      </section>
+      <section aria-labelledby="activity-head">
+        <div class="section-head">
+          <h2 id="activity-head">Activity</h2>
+          <span class="meta">Matches per week</span>
+        </div>
+        <Activity activity={squad.activity} players={shown} />
+      </section>
+    </div>
 
     <section id="maps" class="section">
       <MapPool players={shown} lineups={squad.lineups} mapImages={squad.mapImages} windowDays={squad.windowDays} />
@@ -276,7 +277,6 @@
     display: grid;
     gap: 48px;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    margin-top: 40px;
   }
 
   .footer {
@@ -296,7 +296,7 @@
   @media (max-width: 1060px) {
     .pair {
       grid-template-columns: minmax(0, 1fr);
-      gap: 36px;
+      gap: 64px;
     }
   }
 
@@ -321,6 +321,10 @@
 
     .stamp {
       display: none;
+    }
+
+    .pair {
+      gap: 48px;
     }
   }
 </style>

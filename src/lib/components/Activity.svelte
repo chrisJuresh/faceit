@@ -33,7 +33,7 @@
 </script>
 
 {#if rows.length}
-  <div class="scroll">
+  <div class="scroll bleed">
     <table class="activity">
       <thead>
         <tr>
@@ -79,11 +79,17 @@
 {/if}
 
 <style>
+  /* The wrapper bleeds by the cell spacing, so the outer cells line up with the column edges. */
+  .bleed {
+    margin: 0 -2px;
+  }
+
+  /* Fills its column: the weeks share the width, the name and total columns stay narrow. */
   .activity {
     border-collapse: separate;
     border-spacing: 2px;
-    margin: 0 -2px;
     white-space: nowrap;
+    width: 100%;
   }
 
   th {
@@ -109,6 +115,7 @@
     left: 0;
     position: sticky;
     text-align: left;
+    width: 1%;
     z-index: 1;
   }
 
@@ -127,10 +134,9 @@
     background: var(--cell);
     border-radius: 2px;
     font: 10.5px var(--mono);
-    height: 22px;
+    height: 26px;
     min-width: 26px;
     text-align: center;
-    width: 26px;
   }
 
   .total {
@@ -139,7 +145,7 @@
     font: 12px var(--mono);
     padding-left: 10px;
     text-align: right;
-    width: auto;
+    width: 1%;
   }
 
   .total.zero {
