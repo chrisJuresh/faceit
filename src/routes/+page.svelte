@@ -134,6 +134,10 @@
       <PlayerTable players={shown} {now} isOwner={data.isOwner} {liveIds} />
     </section>
 
+    <section id="maps" class="section">
+      <MapPool players={shown} lineups={squad.lineups} mapImages={squad.mapImages} windowDays={squad.windowDays} />
+    </section>
+
     <!-- Full sections in their own right, with the same heading and spacing as the rest. -->
     <div class="pair section">
       <section aria-labelledby="elo-head">
@@ -151,10 +155,6 @@
         <Activity activity={squad.activity} players={shown} />
       </section>
     </div>
-
-    <section id="maps" class="section">
-      <MapPool players={shown} lineups={squad.lineups} mapImages={squad.mapImages} windowDays={squad.windowDays} />
-    </section>
 
     <section id="games" class="section">
       <div class="section-head">
