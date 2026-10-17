@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { aroundOne, fixed, thousands } from '$lib/format';
+  import { fixed, thousands } from '$lib/format';
   import { togetherMaps } from '$lib/stats';
   import { readout } from '$lib/tooltip.svelte';
   import type { GroupLineup, MapStats, SquadPlayer, TogetherMap } from '$lib/types';
@@ -7,12 +7,11 @@
   import Avatar from './Avatar.svelte';
   import Divider from './Divider.svelte';
   import MapImage from './MapImage.svelte';
-  import WinTrack from './WinTrack.svelte';
 
   /**
-   * Each player's record per map over their last 30 or 90 matches or FACEIT's lifetime record, and
-   * beside it the group's record: games where two or more of the counted players were on the same
-   * team, over the last `windowDays` days.
+   * Each player's record per map over their last 30 or 90 matches or FACEIT's lifetime record,
+   * with the group's record on top: games where two or more of the ticked players were on the
+   * same team, over the last `windowDays` days.
    */
   let {
     players,
@@ -37,8 +36,8 @@
     { key: 'lifetime', label: 'Lifetime' }
   ];
   /**
-   * Cells with fewer matches than this stay uncoloured. A shorter run spreads fewer matches over
-   * the same maps, so its bar is lower. Together rows below FEW_TOGETHER are muted.
+   * Player cells with fewer matches than this stay uncoloured. A shorter run spreads fewer matches
+   * over the same maps, so its bar is lower. The Together row uses its own.
    */
   const FEW: Record<Scope, number> = { last30: 3, last90: 5, lifetime: 10 };
   const FEW_TOGETHER = 5;
@@ -52,39 +51,36 @@
   const records = (player: SquadPlayer): MapRecord[] =>
     scope === 'lifetime' ? player.maps : player.mapForm[scope];
 
-  const rows = $derived([...players].filter((player) => records(player).length).sort((a, b) => b.elo - a.elo));
-
-  /** Only players who played a group game in the window can be counted or left out. */
+  /** Only players who played a group game in the window can be ticked or unticked. */
   const eligible = $derived(new Set(lineups.flatMap((game) => game.lines.map((line) => line.playerId))));
-  const counted = $derived(
-    [...players].filter((player) => eligible.has(player.playerId)).sort((a, b) => b.elo - a.elo)
-  );
   const chosen = $derived(new Set([...eligible].filter((id) => !leftOut.has(id))));
   const together = $derived(togetherMaps(lineups, chosen));
-  // Rows follow the whole group's record, so leaving someone out never adds or removes one.
-  const togetherRows = $derived(
-    [...togetherMaps(lineups, eligible).values()]
-      .sort((a, b) => b.matches - a.matches)
-      .map((record) => ({ map: record.map, record: together.get(record.map) }))
-  );
-  const totals = $derived(
-    [...together.values()].reduce((sum, record) => ({ matches: sum.matches + record.matches, wins: sum.wins + record.wins }), {
-      matches: 0,
-      wins: 0
-    })
-  );
+  // Columns follow the whole group's record, so unticking never adds or removes one.
+  const everyone = $derived(togetherMaps(lineups, eligible));
   const leftOutCount = $derived([...leftOut].filter((id) => eligible.has(id)).length);
 
-  // Maps the shown players have played at least `few` times between them, most played first.
+  const rows = $derived(
+    [...players]
+      .filter((player) => records(player).length || eligible.has(player.playerId))
+      .sort((a, b) => b.elo - a.elo)
+  );
+
+  // Maps the shown players have played at least `few` times between them, most played first, then
+  // any map only the group's games together reach.
   const maps = $derived.by(() => {
     const totals = new Map<string, number>();
     for (const player of rows) {
       for (const record of records(player)) totals.set(record.map, (totals.get(record.map) ?? 0) + record.matches);
     }
-    return [...totals.entries()]
+    const ranked = [...totals.entries()]
       .filter(([, matches]) => matches >= few)
       .sort((a, b) => b[1] - a[1])
-      .map(([map]) => ({ map, image: mapImages[map] ?? '' }));
+      .map(([map]) => map);
+    const extra = [...everyone.values()]
+      .filter((record) => !ranked.includes(record.map))
+      .sort((a, b) => b.matches - a.matches)
+      .map((record) => record.map);
+    return [...ranked, ...extra].map((map) => ({ map, image: mapImages[map] ?? '' }));
   });
 
   const clamp = (value: number) => Math.max(-1, Math.min(1, value));
@@ -100,231 +96,169 @@
 
   const pick = (record: MapRecord) => (metric === 'winRate' ? record.winRate : record.kd);
   const togetherKd = (record: TogetherMap) => (record.deaths ? record.kills / record.deaths : record.kills);
-  const togetherRate = (record: TogetherMap) => (record.wins / record.matches) * 100;
+  const togetherValue = (record: TogetherMap) =>
+    metric === 'winRate' ? (record.wins / record.matches) * 100 : togetherKd(record);
 
   const steps = $derived(metric === 'winRate' ? [30, 40, 50, 60, 70] : [0.5, 0.75, 1, 1.25, 1.5]);
 
-  /** Together needs two people, so the last two counted can't be left out. */
-  const locked = (playerId: string) => !leftOut.has(playerId) && chosen.size <= 2;
-
-  function toggle(playerId: string) {
+  function toggle(playerId: string, event: Event) {
+    const box = event.currentTarget as HTMLInputElement;
     if (leftOut.has(playerId)) leftOut.delete(playerId);
-    else if (!locked(playerId)) leftOut.add(playerId);
+    // Together needs two people; the box is disabled at two, this is a backstop.
+    else if (chosen.size <= 2) box.checked = true;
+    else leftOut.add(playerId);
   }
 </script>
 
 <div class="section-head">
   <h2>Maps</h2>
-</div>
-
-<div class="layout" class:single={lineups.length === 0}>
-  <section aria-labelledby="player-maps-head">
-    <div class="block-head">
-      <h3 id="player-maps-head" class="block-label">Per player</h3>
-      <span class="meta">
-        {#if scopeCount}Last <span class="mono">{scopeCount}</span> matches{:else}Lifetime{/if}, 5v5
-      </span>
-      <div class="controls">
-        <div class="seg" role="group" aria-label="Map matches counted">
-          {#each SCOPES as option (option.key)}
-            <button type="button" aria-pressed={scope === option.key} onclick={() => (scope = option.key)}
-              >{option.label}</button
-            >
-          {/each}
-        </div>
-        <Divider />
-        <div class="seg" role="group" aria-label="Map metric">
-          <button type="button" aria-pressed={metric === 'winRate'} onclick={() => (metric = 'winRate')}>Win %</button>
-          <button type="button" aria-pressed={metric === 'kd'} onclick={() => (metric = 'kd')}>K/D</button>
-        </div>
-      </div>
+  <span class="meta">
+    {#if scopeCount}Last <span class="mono">{scopeCount}</span> matches{:else}Lifetime{/if}, 5v5
+  </span>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Map matches counted">
+      {#each SCOPES as option (option.key)}
+        <button type="button" aria-pressed={scope === option.key} onclick={() => (scope = option.key)}
+          >{option.label}</button
+        >
+      {/each}
     </div>
-
-    {#if rows.length && maps.length}
-      <div class="scroll bleed">
-        <table class="heat">
-          <thead>
-            <tr>
-              <th class="stick"><span class="sr-only">Player</span></th>
-              {#each maps as entry (entry.map)}
-                <th scope="col" class="map">
-                  <MapImage src={entry.image} size="medium" />
-                  <span class="map-name" title={entry.map}>{entry.map}</span>
-                </th>
-              {/each}
-            </tr>
-          </thead>
-          <tbody>
-            {#each rows as player (player.playerId)}
-              <tr>
-                <th class="stick" scope="row">
-                  <span class="who">
-                    <Avatar src={player.avatar} name={player.displayName} />
-                    <span class="name" title={player.displayName}>{player.displayName}</span>
-                  </span>
-                </th>
-                {#each maps as entry (entry.map)}
-                  {@const record = records(player).find((candidate) => candidate.map === entry.map)}
-                  <td>
-                    {#if record}
-                      {@const thin = record.matches < few}
-                      {@const lines = [
-                        `${player.displayName} · ${entry.map}`,
-                        `${thousands(record.matches)} matches · ${fixed(record.winRate)}% won`,
-                        `K/D ${fixed(record.kd, 2)} · ADR ${fixed(record.adr, 1)}`
-                      ]}
-                      <span
-                        class="cell"
-                        class:few={thin}
-                        style:background={thin ? undefined : tint(pick(record))}
-                        {...readout(() => lines)}
-                      >
-                        <b aria-hidden="true">{text(pick(record))}</b><small aria-hidden="true">{thousands(record.matches)}</small>
-                        <!-- The row and column headers already name the player and map. -->
-                        <span class="sr-only">{lines.slice(1).join(', ')}</span>
-                      </span>
-                    {:else}
-                      <span class="cell empty"><span aria-hidden="true">—</span><span class="sr-only">No matches</span></span>
-                    {/if}
-                  </td>
-                {/each}
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
-      <p class="legend below">
-        <span class="key">
-          <span class="mono">{metric === 'winRate' ? '30' : '0.50'}</span>
-          <span class="scale" aria-hidden="true">
-            {#each steps as step (step)}<i style:background={tint(step) ?? 'var(--cell)'}></i>{/each}
-          </span>
-          <span class="mono">{metric === 'winRate' ? '70' : '1.50'}</span>
-          {metric === 'winRate' ? 'win %' : 'K/D'}
-        </span>
-        <span class="key">Small figure: matches</span>
-        <span class="key">Uncoloured: under <span class="mono">{few}</span> matches</span>
-      </p>
-    {:else}
-      <p class="none">No map stats</p>
-    {/if}
-  </section>
-
-  {#if lineups.length}
-    <section aria-labelledby="together-head">
-      <div class="block-head">
-        <h3 id="together-head" class="block-label">Together</h3>
-        <span class="meta">
-          Last <span class="mono">{windowDays}</span> days{#if totals.matches}{' · '}<b>{totals.matches}</b> games ·
-            <b>{totals.wins}–{totals.matches - totals.wins}</b>{/if}
-        </span>
-        {#if leftOutCount}
-          <button class="text-button reset" type="button" onclick={() => leftOut.clear()}>Count everyone</button>
-        {/if}
-      </div>
-
-      <div class="counting">
-        <span class="field-label" id="counting-label">Counting</span>
-        <div class="seg" role="group" aria-labelledby="counting-label">
-          {#each counted as player (player.playerId)}
-            {@const included = !leftOut.has(player.playerId)}
-            <button
-              type="button"
-              aria-pressed={included}
-              aria-disabled={locked(player.playerId)}
-              title={locked(player.playerId) ? 'Together needs at least two players' : undefined}
-              onclick={() => toggle(player.playerId)}>{player.displayName}</button
-            >
-          {/each}
-        </div>
-      </div>
-
-      <div class="scroll">
-        <table class="mini">
-          <thead>
-            <tr>
-              <th class="l" scope="col">Map</th>
-              <th scope="col">M</th>
-              <th scope="col">W–L</th>
-              <th scope="col">Win %</th>
-              <th scope="col" class="track"><span class="sr-only">Win rate from 0 to 100, 50 marked</span></th>
-              <th scope="col" title="Kills per death of the counted players">K/D</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each togetherRows as { map, record } (map)}
-              <tr class:low={!record || record.matches < FEW_TOGETHER}>
-                <th class="l" scope="row">
-                  <span class="map-row">
-                    <MapImage src={mapImages[map] ?? ''} size="small" />
-                    <span>{map}</span>
-                  </span>
-                </th>
-                {#if record}
-                  <td>{record.matches}</td>
-                  <td>{record.wins}–{record.matches - record.wins}</td>
-                  <td>{fixed(togetherRate(record))}</td>
-                  <td class="track">
-                    <WinTrack rate={togetherRate(record)} faded={record.matches < FEW_TOGETHER} />
-                  </td>
-                  <td class={record.matches < FEW_TOGETHER ? '' : aroundOne(togetherKd(record))}>
-                    {fixed(togetherKd(record), 2)}
-                  </td>
-                {:else}
-                  <td>0</td>
-                  <td>—</td>
-                  <td>—</td>
-                  <td class="track"></td>
-                  <td>—</td>
-                {/if}
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  {/if}
+    <Divider />
+    <div class="seg" role="group" aria-label="Map metric">
+      <button type="button" aria-pressed={metric === 'winRate'} onclick={() => (metric = 'winRate')}>Win %</button>
+      <button type="button" aria-pressed={metric === 'kd'} onclick={() => (metric = 'kd')}>K/D</button>
+    </div>
+  </div>
 </div>
+
+{#if rows.length && maps.length}
+  <div class="scroll bleed">
+    <table class="heat">
+      <thead>
+        <tr>
+          <th class="stick"><span class="sr-only">Player</span></th>
+          {#each maps as entry (entry.map)}
+            <th scope="col" class="map">
+              <MapImage src={entry.image} size="medium" />
+              <span class="map-name" title={entry.map}>{entry.map}</span>
+            </th>
+          {/each}
+        </tr>
+      </thead>
+      <tbody>
+        {#if lineups.length}
+          <tr class="together">
+            <th class="stick" scope="row">
+              <span class="label">Together</span>
+              <span class="note">
+                <span class="mono">{windowDays}d</span>{#if leftOutCount}{' · '}<span class="mono">{leftOutCount}</span>
+                  left out{/if}
+              </span>
+            </th>
+            {#each maps as entry (entry.map)}
+              {@const record = together.get(entry.map)}
+              <td>
+                {#if record}
+                  {@const value = togetherValue(record)}
+                  {@const thin = record.matches < FEW_TOGETHER}
+                  {@const lines = [
+                    `Together · ${entry.map}`,
+                    `${record.wins}–${record.matches - record.wins} · ${thousands(record.matches)} games`,
+                    `K/D ${fixed(togetherKd(record), 2)}`
+                  ]}
+                  <span
+                    class="cell"
+                    class:few={thin}
+                    style:background={thin ? undefined : tint(value)}
+                    {...readout(() => lines)}
+                  >
+                    <b aria-hidden="true">{text(value)}</b><small aria-hidden="true">{thousands(record.matches)}</small>
+                    <span class="sr-only">{lines.slice(1).join(', ')}</span>
+                  </span>
+                {:else}
+                  <span class="cell empty"><span aria-hidden="true">—</span><span class="sr-only">No games</span></span>
+                {/if}
+              </td>
+            {/each}
+          </tr>
+        {/if}
+        {#each rows as player (player.playerId)}
+          {@const included = !leftOut.has(player.playerId)}
+          {@const canPick = eligible.has(player.playerId)}
+          <tr>
+            <th class="stick" scope="row">
+              <svelte:element this={canPick ? 'label' : 'span'} class="pick" class:out={canPick && !included}>
+                {#if canPick}
+                  <input
+                    type="checkbox"
+                    checked={included}
+                    disabled={included && chosen.size <= 2}
+                    onchange={(event) => toggle(player.playerId, event)}
+                    aria-label="Count {player.displayName} in Together"
+                  />
+                {:else}
+                  <span class="spacer" aria-hidden="true"></span>
+                {/if}
+                <Avatar src={player.avatar} name={player.displayName} />
+                <span class="name" title={player.displayName}>{player.displayName}</span>
+              </svelte:element>
+            </th>
+            {#each maps as entry (entry.map)}
+              {@const record = records(player).find((candidate) => candidate.map === entry.map)}
+              <td>
+                {#if record}
+                  {@const thin = record.matches < few}
+                  {@const lines = [
+                    `${player.displayName} · ${entry.map}`,
+                    `${thousands(record.matches)} matches · ${fixed(record.winRate)}% won`,
+                    `K/D ${fixed(record.kd, 2)} · ADR ${fixed(record.adr, 1)}`
+                  ]}
+                  <span
+                    class="cell"
+                    class:few={thin}
+                    style:background={thin ? undefined : tint(pick(record))}
+                    {...readout(() => lines)}
+                  >
+                    <b aria-hidden="true">{text(pick(record))}</b><small aria-hidden="true">{thousands(record.matches)}</small>
+                    <!-- The row and column headers already name the player and map. -->
+                    <span class="sr-only">{lines.slice(1).join(', ')}</span>
+                  </span>
+                {:else}
+                  <span class="cell empty"><span aria-hidden="true">—</span><span class="sr-only">No matches</span></span>
+                {/if}
+              </td>
+            {/each}
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
+  <p class="legend below">
+    <span class="key">
+      <span class="mono">{metric === 'winRate' ? '30' : '0.50'}</span>
+      <span class="scale" aria-hidden="true">
+        {#each steps as step (step)}<i style:background={tint(step) ?? 'var(--cell)'}></i>{/each}
+      </span>
+      <span class="mono">{metric === 'winRate' ? '70' : '1.50'}</span>
+      {metric === 'winRate' ? 'win %' : 'K/D'}
+    </span>
+    <span class="key">Small figure: matches</span>
+    <span class="key">
+      Uncoloured: under <span class="mono">{few}</span> matches{#if lineups.length},
+        <span class="mono">{FEW_TOGETHER}</span> together{/if}
+    </span>
+  </p>
+{:else}
+  <p class="none">No map stats</p>
+{/if}
 
 <style>
-  /* Lifetime takes the larger share and stretches its cells to fill it; Together sits beside it. */
-  .layout {
-    align-items: start;
-    display: grid;
-    gap: 40px 48px;
-    grid-template-columns: minmax(0, 3fr) minmax(340px, 2fr);
-  }
-
-  .layout.single {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .block-head {
-    align-items: center;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 12px;
-    margin-bottom: 10px;
-    min-height: 28px;
-  }
-
-  .block-head .controls {
-    align-items: center;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 14px;
-  }
-
-  .block-head .controls,
-  .block-head .reset {
-    margin-left: auto;
-  }
-
   /* The wrapper bleeds by the cell spacing, so the outer cells line up with the column edges. */
   .bleed {
     margin: 0 -2px;
   }
 
+  /* Map columns share whatever width the name column leaves. */
   .heat {
     border-collapse: separate;
     border-spacing: 2px;
@@ -404,8 +338,85 @@
     box-shadow: inset 0 0 0 1px var(--rule);
   }
 
-  .who {
+  /* A gap under the group's row sets it apart from the players'. */
+  .together th,
+  .together td {
+    padding-bottom: 8px;
+  }
+
+  .together .label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .note {
+    color: var(--muted);
+    display: block;
+    font-size: 11.5px;
+  }
+
+  .pick {
+    align-items: center;
+    display: flex;
+    gap: 8px;
     padding-right: 14px;
+  }
+
+  label.pick {
+    cursor: pointer;
+  }
+
+  label.pick:has(input:disabled) {
+    cursor: default;
+  }
+
+  .pick input,
+  .spacer {
+    flex: none;
+    height: 14px;
+    margin: 0;
+    width: 14px;
+  }
+
+  /* A square in the page's rule colour; ticked, it fills with the accent and shows a check. */
+  .pick input {
+    appearance: none;
+    background: transparent;
+    border: 1px solid var(--rule-2);
+    border-radius: 2px;
+    cursor: pointer;
+    display: grid;
+    place-content: center;
+  }
+
+  .pick input::after {
+    border: solid var(--on-accent);
+    border-width: 0 1.5px 1.5px 0;
+    content: '';
+    height: 8px;
+    transform: translateY(-1px) rotate(45deg);
+    visibility: hidden;
+    width: 4px;
+  }
+
+  .pick input:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .pick input:checked::after {
+    visibility: visible;
+  }
+
+  label.pick:hover input:not(:checked) {
+    border-color: var(--ink-2);
+  }
+
+  /* The last two can't be unticked: still ticked, but quieter. */
+  .pick input:disabled {
+    cursor: default;
+    opacity: 0.45;
   }
 
   .name {
@@ -415,6 +426,10 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .pick.out .name {
+    color: var(--muted);
   }
 
   .scale {
@@ -430,73 +445,17 @@
     width: 8px;
   }
 
-  .counting {
-    align-items: baseline;
-    display: flex;
-    gap: 12px;
-    margin: -4px 0 12px;
-  }
-
-  .counting .seg {
-    flex: 1 1 0;
-    min-width: 0;
-  }
-
-  /* A counted player is underlined like any chosen option; one left out reads struck through. */
-  .counting .seg button[aria-pressed='false'] {
-    color: var(--muted);
-    text-decoration: line-through;
-    text-decoration-color: var(--faint);
-  }
-
-  .counting .seg button[aria-disabled='true'] {
-    cursor: default;
-  }
-
-  .mini th,
-  .mini td {
-    height: 32px;
-  }
-
-  .map-row {
-    align-items: center;
-    display: flex;
-    gap: 8px;
-  }
-
-  /* The win-rate line takes whatever width the table has spare. */
-  .mini .track {
-    --track-width: 100%;
-    padding-left: 14px;
-    text-align: left;
-    width: 40%;
-  }
-
-  @media (max-width: 1300px) {
-    .layout {
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .mini .track {
-      width: 30%;
-    }
-  }
-
   @media (max-width: 640px) {
     .stick {
       box-shadow: inset -1px 0 var(--rule);
     }
 
-    .who {
+    .pick {
       padding-right: 8px;
     }
 
     .name {
       max-width: 91px;
-    }
-
-    .block-head .controls {
-      margin-left: 0;
     }
   }
 </style>

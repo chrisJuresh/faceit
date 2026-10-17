@@ -9,7 +9,7 @@ One page, top to bottom:
 1. **Live.** Whether anyone in the group is in a FACEIT match right now, with everything FACEIT publishes about it. A match that finished in the last hour stays here with its final score.
 2. **Highlights** (planned). Clips extracted from match demos will sit here: one main highlight per game and one per player per game.
 3. **Players.** Every player's FACEIT numbers in one sortable table (K/D first), switchable between their last 10, 30 or 100 matches and FACEIT's lifetime record, with a detail view per player.
-4. **Maps.** Each player's record per map, switchable between their last 30 or 90 matches and FACEIT's lifetime record, with the group's record together over the last 90 days beside it (switch a player off under Counting to leave them out of it). A map cell stays uncoloured under 3 matches for the last 30, 5 for the last 90 and 10 for lifetime.
+4. **Maps.** One grid of each player's record per map, switchable between their last 30 or 90 matches and FACEIT's lifetime record, with the group's record together over the last 90 days as the top row. Each player who played with the group has a tick by their name; untick them to leave them out of that row. A player's map cell stays uncoloured under 3 matches for the last 30, 5 for the last 90 and 10 for lifetime, and a Together cell under 5 games.
 5. **ELO, activity, games and duos.** Each player's ELO against FACEIT's level bands and their matches per week, the games played together, and duo records.
 
 The masthead's Active / All switch applies to every per-player view.
