@@ -14,6 +14,9 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const prerender = false;
 
+// A cold load reads ~100 FACEIT endpoints at up to 18 a second; give it room on Vercel.
+export const config = { maxDuration: 30 };
+
 export const load: PageServerLoad = async ({ cookies, depends, setHeaders }) => {
   depends('faceit:squad');
   setHeaders({ 'cache-control': 'private, no-store' });

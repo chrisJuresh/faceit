@@ -1,38 +1,74 @@
-/* Tokens. Values are set per theme below. */
-:root {
-  --page: #f6f5f1;
-  --surface-1: #ffffff;
-  --surface-2: #ecebe6;
-  --rule: #dddbd4;
-  --rule-strong: #b9b6ad;
-  --text-1: #16161a;
-  --text-2: #4a4a50;
-  --text-3: #7d7c78;
-  --win: #1d8a4e;
-  --loss: #c8382e;
-  --win-wash: rgba(29, 138, 78, 0.14);
-  --loss-wash: rgba(200, 56, 46, 0.12);
-  --accent: #e8590c;
-  --font-sans: system-ui, sans-serif;
-  --font-num: system-ui, sans-serif;
+/*
+  Stackline. Newsreader for headings, Libre Franklin for everything else (tabular figures in
+  tables). Structure comes from rules and alignment rather than boxes. Dark is the default.
+
+  Win/loss marks use colours checked for colour-blind separation, and every win/loss mark also
+  differs in shape or carries a W/L letter. Text colours meet 4.5:1 on both page and band.
+*/
+:root,
+:root[data-theme='dark'] {
+  --page: #121214;
+  --band: #18181b;
+  --hover: #1f1f23;
+  --ink: #ebe9e3;
+  --ink-2: #b2b0aa;
+  --muted: #878681;
+  --rule: #2a2a2e;
+  --rule-2: #3d3d42;
+  --accent: #92adf6;
+  --win: #2aa37c;
+  --loss: #e25d3e;
+  --win-text: #2aa37c;
+  --loss-text: #e8694b;
+  --ink-rgb: 235 233 227;
+  --win-rgb: 42 163 124;
+  --loss-rgb: 226 93 62;
+  /* FACEIT's level colours. */
+  --level-1: #eeeeee;
+  --level-2: #1ce400;
+  --level-4: #ffc800;
+  --level-8: #ff6309;
+  --level-10: #fe1f00;
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --page: #f7f6f2;
+  --band: #f0eee8;
+  --hover: #e9e6de;
+  --ink: #17171a;
+  --ink-2: #4a4a50;
+  --muted: #6b6a65;
+  --rule: #dedbd3;
+  --rule-2: #c3bfb5;
+  --accent: #1f4fbf;
+  --win: #108a6c;
+  --loss: #d24a33;
+  --win-text: #0f7a5f;
+  --loss-text: #bb3b27;
+  --ink-rgb: 23 23 26;
+  --win-rgb: 16 138 108;
+  --loss-rgb: 210 74 51;
+  /* The same hues, darkened enough to show on paper. */
+  --level-1: #9c9c9c;
+  --level-2: #17a800;
+  --level-4: #d9a000;
+  --level-8: #ec5a00;
+  --level-10: #e01b00;
   color-scheme: light;
 }
 
-:root[data-theme='dark'] {
-  --page: #111214;
-  --surface-1: #17181b;
-  --surface-2: #232428;
-  --rule: #2a2b30;
-  --rule-strong: #44464d;
-  --text-1: #ecebe7;
-  --text-2: #b4b3ae;
-  --text-3: #7f7e7a;
-  --win: #4cc483;
-  --loss: #ef6b5f;
-  --win-wash: rgba(76, 196, 131, 0.16);
-  --loss-wash: rgba(239, 107, 95, 0.14);
-  --accent: #ff7a33;
-  color-scheme: dark;
+:root {
+  --serif: 'Newsreader Variable', Georgia, 'Times New Roman', serif;
+  --sans: 'Libre Franklin Variable', 'Helvetica Neue', Arial, sans-serif;
+  --gutter: 48px;
+  --max: 1280px;
+}
+
+@media (max-width: 760px) {
+  :root {
+    --gutter: 16px;
+  }
 }
 
 *,
@@ -48,28 +84,47 @@ html {
 
 body {
   background: var(--page);
-  color: var(--text-1);
-  font-family: var(--font-sans);
-  font-size: 0.9375rem;
-  line-height: 1.45;
+  color: var(--ink);
+  font: 400 14px/1.45 var(--sans);
+  font-variant-numeric: lining-nums;
+  -webkit-font-smoothing: antialiased;
   margin: 0;
   min-width: 320px;
 }
 
 button,
-input,
-select {
+input {
   color: inherit;
   font: inherit;
 }
 
 a {
-  color: inherit;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
 }
 
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+.wrap {
+  margin: 0 auto;
+  max-width: var(--max);
+  padding: 0 var(--gutter);
 }
 
 .sr-only {
@@ -84,26 +139,92 @@ a {
   width: 1px;
 }
 
-/* Horizontal scroll for wide tables, with the first column sticky where marked. */
-.scroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+/* Section heading: a 2px rule, a serif noun, and quiet notes or controls on the right. */
+.section-head {
+  align-items: baseline;
+  border-top: 2px solid var(--ink);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 24px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  padding-top: 8px;
+}
+
+.section-head h2 {
+  font: 500 28px/1.15 var(--serif);
+  letter-spacing: -0.01em;
+}
+
+.meta {
+  align-items: center;
+  color: var(--ink-2);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 4px 12px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* Text-only toggles: the chosen option is underlined. */
+.controls {
+  align-items: flex-end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 40px;
+  margin-bottom: 10px;
+}
+
+.controls .push {
+  margin-left: auto;
+}
+
+.seg {
+  display: flex;
+  font-size: 13px;
+  gap: 18px;
+}
+
+.seg button {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  padding: 3px 0;
+}
+
+.seg button:hover {
+  color: var(--ink);
+}
+
+.seg button[aria-pressed='true'] {
+  border-bottom-color: var(--ink);
+  color: var(--ink);
+  cursor: default;
+}
+
+.seg .count {
+  color: var(--muted);
+  margin-left: 2px;
 }
 
 .text-button {
   background: none;
   border: 0;
-  color: var(--text-2);
+  border-bottom: 1px solid var(--rule-2);
+  color: var(--ink-2);
   cursor: pointer;
+  font-size: 13px;
   padding: 0;
-  text-decoration: underline;
-  text-decoration-color: var(--rule-strong);
-  text-underline-offset: 3px;
 }
 
 .text-button:hover {
-  color: var(--text-1);
-  text-decoration-color: currentColor;
+  border-bottom-color: var(--ink);
+  color: var(--ink);
 }
 
 .text-button:disabled {
@@ -111,26 +232,170 @@ a {
   opacity: 0.6;
 }
 
-.quiet,
-.note {
-  color: var(--text-3);
+.link-button {
+  background: none;
+  border: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 13px;
+  margin-top: 10px;
+  padding: 0;
 }
 
-/* Win/loss strip: one small mark per match, newest first. */
+.link-button:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.none {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Wide tables scroll sideways inside their section. */
+.scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/*
+  Tables: numbers right-aligned in tabular figures, hairline row rules, a heavier rule under
+  the header. .l marks text columns; .stick keeps the first column in view while scrolling.
+*/
+.tbl {
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums lining-nums;
+  width: 100%;
+}
+
+.tbl th,
+.tbl td {
+  font-weight: 400;
+  padding: 7px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.tbl th:first-child,
+.tbl td:first-child {
+  padding-left: 0;
+}
+
+.tbl .l {
+  text-align: left;
+}
+
+.tbl thead th {
+  border-bottom: 1px solid var(--ink);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 500;
+  padding-bottom: 6px;
+  padding-top: 2px;
+  vertical-align: bottom;
+}
+
+.tbl thead tr.groups th {
+  border-bottom: 0;
+  color: var(--muted);
+  font-weight: 400;
+  padding-bottom: 0;
+  text-align: left;
+}
+
+.tbl thead tr.groups th span {
+  border-bottom: 1px solid var(--rule-2);
+  display: block;
+  padding-bottom: 3px;
+}
+
+.tbl tbody td,
+.tbl tbody th {
+  border-bottom: 1px solid var(--rule);
+}
+
+.tbl .stick {
+  background: var(--page);
+  box-shadow: inset -1px 0 var(--rule);
+  left: 0;
+  padding-right: 14px;
+  position: sticky;
+  z-index: 1;
+}
+
+.tbl thead .stick {
+  box-shadow: none;
+}
+
+.tbl .low,
+.tbl .low td {
+  color: var(--muted);
+}
+
+.pos {
+  color: var(--win-text);
+}
+
+.neg {
+  color: var(--loss-text);
+}
+
+.res {
+  font-weight: 600;
+}
+
+.res.win {
+  color: var(--win-text);
+}
+
+.res.loss {
+  color: var(--loss-text);
+}
+
+/* Win/loss strip, newest first. Wins are tall and losses short, so it reads without colour. */
 .results {
+  align-items: flex-end;
   display: inline-flex;
   gap: 2px;
+  height: 12px;
+  vertical-align: middle;
 }
 
 .results i {
   background: var(--loss);
-  border-radius: 1px;
   display: block;
-  height: 10px;
-  opacity: 0.85;
+  height: 5px;
   width: 4px;
 }
 
 .results i.win {
   background: var(--win);
+  height: 12px;
+}
+
+/* Raw stat lists (every field FACEIT returned). */
+.raw {
+  display: grid;
+  font-size: 12.5px;
+  gap: 3px 32px;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  margin: 0;
+}
+
+.raw div {
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 3px 0;
+}
+
+.raw dt {
+  color: var(--ink-2);
+}
+
+.raw dd {
+  font-variant-numeric: tabular-nums;
+  margin: 0;
 }

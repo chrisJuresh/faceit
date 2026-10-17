@@ -59,6 +59,13 @@ export interface LifetimeStats {
   enemiesFlashedPerRound: number | null;
   /** Share of kills made with a sniper rifle. */
   sniperKillShare: number | null;
+  /** Per-match averages and multi-kill totals, summed over FACEIT's 5v5 map records. */
+  avgKills: number | null;
+  avgAssists: number | null;
+  mvpsPerMatch: number | null;
+  tripleKills: number | null;
+  quadroKills: number | null;
+  pentaKills: number | null;
 }
 
 /** FACEIT's lifetime record on one map (5v5 only). */
@@ -75,6 +82,11 @@ export interface MapStats {
   kills: number;
   deaths: number;
   rounds: number;
+  assists: number;
+  mvps: number;
+  tripleKills: number;
+  quadroKills: number;
+  pentaKills: number;
   entrySuccess: number | null;
   clutch1v1: number | null;
   utilityDamagePerRound: number | null;

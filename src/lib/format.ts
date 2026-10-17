@@ -7,6 +7,12 @@ export const percentText = (value: number | null | undefined, digits = 0) =>
 export const thousands = (value: number | null | undefined) =>
   value === null || value === undefined || !Number.isFinite(value) ? '—' : value.toLocaleString('en-GB');
 
+/** "W 13–9", or just "W" when FACEIT gave no score. */
+export function resultText(won: boolean, ours: number | null, theirs: number | null) {
+  const letter = won ? 'W' : 'L';
+  return ours === null || theirs === null ? letter : `${letter} ${ours}–${theirs}`;
+}
+
 export function timeAgo(timestamp: number | null, now: number) {
   if (!timestamp) return '—';
   const seconds = Math.max(0, now - timestamp);

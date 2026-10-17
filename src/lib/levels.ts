@@ -23,3 +23,12 @@ export function levelColor(level: number) {
   if (level >= 2) return '#1ce400';
   return '#eeeeee';
 }
+
+/** The CSS variable for a level's colour; app.css darkens them for the light theme. */
+export function levelVar(level: number) {
+  if (level >= 10) return 'var(--level-10)';
+  if (level >= 8) return 'var(--level-8)';
+  if (level >= 4) return 'var(--level-4)';
+  if (level >= 2) return 'var(--level-2)';
+  return 'var(--level-1)';
+}

@@ -123,6 +123,11 @@ export function parseMaps(stats: FaceitLifetimeStats | null): MapStats[] {
         kills: statNumber(s, 'Kills'),
         deaths: statNumber(s, 'Deaths'),
         rounds: statNumber(s, 'Rounds'),
+        assists: statNumber(s, 'Assists'),
+        mvps: statNumber(s, 'MVPs'),
+        tripleKills: statNumber(s, 'Triple Kills'),
+        quadroKills: statNumber(s, 'Quadro Kills'),
+        pentaKills: statNumber(s, 'Penta Kills'),
         entrySuccess: percent(optionalStat(s, 'Entry Success Rate')),
         clutch1v1: percent(optionalStat(s, '1v1 Win Rate')),
         utilityDamagePerRound: optionalStat(s, 'Utility Damage per Round')
@@ -137,9 +142,13 @@ export function parseLifetime(stats: FaceitLifetimeStats | null, maps: MapStats[
   if (!life || !statNumber(life, 'Matches')) return null;
 
   // FACEIT's lifetime "K/D Ratio" and "Total Headshots %" are running sums, so use the
-  // averaged fields, and derive K/R from the per-map kill and round totals.
-  const mapRounds = maps.reduce((sum, map) => sum + map.rounds, 0);
-  const mapKills = maps.reduce((sum, map) => sum + map.kills, 0);
+  // averaged fields, and derive K/R and per-match figures from the 5v5 map totals.
+  const total = (pick: (map: MapStats) => number) => maps.reduce((sum, map) => sum + pick(map), 0);
+  const mapMatches = total((map) => map.matches);
+  const mapRounds = total((map) => map.rounds);
+  const mapKills = total((map) => map.kills);
+  const perMatch = (value: number) => (mapMatches ? round(value / mapMatches, 1) : null);
+  const ifMaps = (value: number) => (mapMatches ? value : null);
   const extendedKills = statNumber(life, 'Total Kills with extended stats');
   const sniperKills = optionalStat(life, 'Total Sniper Kills');
   const recent = Array.isArray(life['Recent Results']) ? life['Recent Results'] : [];
@@ -167,7 +176,13 @@ export function parseLifetime(stats: FaceitLifetimeStats | null, maps: MapStats[
     flashesPerRound: optionalStat(life, 'Flashes per Round'),
     enemiesFlashedPerRound: optionalStat(life, 'Enemies Flashed per Round'),
     sniperKillShare:
-      sniperKills !== null && extendedKills ? round((sniperKills / extendedKills) * 100, 1) : null
+      sniperKills !== null && extendedKills ? round((sniperKills / extendedKills) * 100, 1) : null,
+    avgKills: perMatch(mapKills),
+    avgAssists: perMatch(total((map) => map.assists)),
+    mvpsPerMatch: perMatch(total((map) => map.mvps)),
+    tripleKills: ifMaps(total((map) => map.tripleKills)),
+    quadroKills: ifMaps(total((map) => map.quadroKills)),
+    pentaKills: ifMaps(total((map) => map.pentaKills))
   };
 }
 
