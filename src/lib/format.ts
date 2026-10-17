@@ -65,6 +65,13 @@ export function dateTime(timestamp: number) {
   }).format(new Date(timestamp * 1000))} UTC`;
 }
 
+/** "19:42 UTC". Pinned to UTC so the server render and the browser agree. */
+export function clockUtc(timestamp: number) {
+  return `${new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }).format(
+    new Date(timestamp * 1000)
+  )} UTC`;
+}
+
 export function duration(seconds: number) {
   const total = Math.max(0, Math.floor(seconds));
   const hours = Math.floor(total / 3600);

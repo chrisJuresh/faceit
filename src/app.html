@@ -7,11 +7,10 @@
     <meta name="description" content="FACEIT CS2 stats and live matches for our group of friends." />
     <link rel="icon" href="%sveltekit.assets%/favicon.svg" />
     <script>
+      // Dark unless the visitor chose light before; the OS preference is deliberately ignored.
       try {
         const saved = localStorage.getItem('stackline-theme');
-        if (saved) document.documentElement.dataset.theme = saved;
-        else if (matchMedia('(prefers-color-scheme: light)').matches)
-          document.documentElement.dataset.theme = 'light';
+        if (saved === 'light' || saved === 'dark') document.documentElement.dataset.theme = saved;
       } catch {}
     </script>
     %sveltekit.head%

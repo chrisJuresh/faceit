@@ -47,51 +47,58 @@
       .slice(0, 10)
   );
 
-  /** The status words, and the time that goes with them. */
-  function status(match: LiveMatch): [string, string] {
+  /**
+   * The status words, and the time that goes with them. Only the newest finished board, with
+   * nothing in progress, speaks for the whole group.
+   */
+  function status(match: LiveMatch, index: number): [string, string] {
     if (match.phase === 'live') return ['In match', match.startedAt ? stopwatch(clock - match.startedAt) : ''];
     if (match.phase === 'setup')
       return match.configuredAt ? ['Starting · room opened', timeAgo(match.configuredAt, clock)] : ['Starting', ''];
     const ended = match.finishedAt ? timeAgo(match.finishedAt, clock) : '';
-    if (!inProgress.length) return ended ? ['Nobody is in a match · last one finished', ended] : ['Nobody is in a match', ''];
+    if (index === 0 && !inProgress.length)
+      return ended ? ['Nobody is in a match · last one finished', ended] : ['Nobody is in a match', ''];
     return ['Finished', ended];
   }
 </script>
 
-<section id="live" class="band" class:idle={!boards.length} aria-labelledby="live-head">
+<section id="live" class="band on-band" aria-labelledby="live-head">
   <div class="wrap">
     {#each boards as match, index (match.matchId)}
-      {@const [words, time] = status(match)}
+      {@const [words, time] = status(match, index)}
       <div class="board" class:later={index > 0}>
-        <div class="live-head">
+        <div class="section-head">
           {#if index === 0}<h2 id="live-head">Live</h2>{/if}
-          <span class="status">
-            {#if match.phase !== 'finished'}<i class="dot" aria-hidden="true"></i>{/if}{words}{#if time}{match.phase === 'live' ? ' · ' : ' '}<span class="time">{time}</span>{/if}
+          <span class="meta">
+            {#if match.phase !== 'finished'}<i class="dot" aria-hidden="true"></i>{/if}{words}{#if time}{match.phase ===
+                'live'
+                  ? ' · '
+                  : ' '}<b>{time}</b>{/if}
           </span>
-          {#if index === 0 && failed}<span class="muted">Couldn't reach FACEIT; showing the last update</span>{/if}
-          <span class="links">
+          {#if index === 0 && failed}<span class="meta">Couldn't reach FACEIT; showing the last update</span>{/if}
+          <div class="controls">
             {#if match.demoUrl}<a class="ext" href={match.demoUrl} target="_blank" rel="noreferrer">Demo ↗</a>{/if}
             <a class="ext" href={match.faceitUrl} target="_blank" rel="noreferrer">Match room ↗</a>
-          </span>
+          </div>
         </div>
         <MatchBoard {match} />
       </div>
     {:else}
-      <div class="live-head">
+      <div class="section-head">
         <h2 id="live-head">Live</h2>
-        <span class="status">Nobody is in a match</span>
-        {#if failed}<span class="muted">Couldn't reach FACEIT; showing the last update</span>{/if}
+        <span class="meta">Nobody is in a match</span>
+        {#if failed}<span class="meta">Couldn't reach FACEIT; showing the last update</span>{/if}
       </div>
       {#if lastGame || lastPlayed.length}
-        <div class="idle-grid">
+        <div class="idle-grid" class:single={!lastGame || !lastPlayed.length}>
           {#if lastGame}
             <div>
-              <h3 class="label">Last game together</h3>
+              <h4>Last game together</h4>
               <p class="last-game">
                 {#if lastGame.map}<span class="map">{lastGame.map}</span>{/if}
                 <span class="res" class:win={lastGame.won} class:loss={!lastGame.won}>{lastGame.won ? 'W' : 'L'}</span>
                 <span class="mono">{score(lastGame.teamScore, lastGame.enemyScore)}</span>
-                <span class="mono muted">{timeAgo(lastGame.finishedAt, clock)}</span>
+                <span class="mono muted">{age(lastGame.finishedAt, clock)}</span>
               </p>
               <p class="with">
                 {lastGame.lines.map((line) => byId.get(line.playerId)?.displayName ?? 'Unknown').join(', ')}
@@ -100,12 +107,12 @@
           {/if}
           {#if lastPlayed.length}
             <div>
-              <h3 class="label">Last played</h3>
+              <h4>Last played</h4>
               <ul class="recent">
                 {#each lastPlayed as player (player.playerId)}
                   <li>
-                    <Avatar src={player.avatar} name={player.displayName} size={20} />
-                    <span class="name">{player.displayName}</span>
+                    <Avatar src={player.avatar} name={player.displayName} />
+                    <span class="name" title={player.displayName}>{player.displayName}</span>
                     <span class="mono muted">{age(player.lastMatchAt, clock)}</span>
                   </li>
                 {/each}
@@ -123,26 +130,7 @@
     --surface: var(--band);
     background: var(--band);
     border-bottom: 1px solid var(--rule);
-    padding: 22px 0 30px;
-  }
-
-  .band.idle {
-    padding: 22px 0 34px;
-  }
-
-  /* Opened rows inside the band sit on the page colour so they stand apart. */
-  .band :global(.tbl tr.open > *),
-  .band :global(.tbl tr.detail > td) {
-    --surface: var(--page);
-    background-color: var(--page);
-  }
-
-  .live-head {
-    align-items: baseline;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 16px;
-    margin-bottom: 18px;
+    padding: 22px 0 28px;
   }
 
   .later {
@@ -151,35 +139,14 @@
     padding-top: 20px;
   }
 
-  h2 {
-    font: 600 20px/28px var(--sans);
-    letter-spacing: -0.01em;
-  }
-
-  .status {
-    color: var(--ink-2);
-    font-size: 12.5px;
-  }
-
   .dot {
     background: var(--accent);
     border-radius: 50%;
     display: inline-block;
-    height: 7px;
-    margin-right: 7px;
-    vertical-align: 1px;
-    width: 7px;
-  }
-
-  .time {
-    font-family: var(--mono);
-    font-size: 12px;
-  }
-
-  .links {
-    display: flex;
-    gap: 18px;
-    margin-left: auto;
+    height: 8px;
+    margin-right: 8px;
+    vertical-align: 0;
+    width: 8px;
   }
 
   .idle-grid {
@@ -188,10 +155,12 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
   }
 
-  .label {
-    color: var(--muted);
-    font: 400 12px/1.4 var(--sans);
-    margin-bottom: 10px;
+  .idle-grid.single {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  h4 {
+    margin-bottom: 8px;
   }
 
   .last-game {
@@ -199,19 +168,14 @@
     display: flex;
     flex-wrap: wrap;
     gap: 4px 12px;
-    font-size: 15px;
   }
 
   .last-game .map {
-    font-weight: 600;
-  }
-
-  .last-game .res {
-    font-size: 15px;
+    font: 600 15px/22px var(--sans);
   }
 
   .last-game .mono {
-    font-size: 14px;
+    font-size: 12px;
   }
 
   .with {
@@ -231,11 +195,12 @@
   .recent li {
     align-items: center;
     display: flex;
-    gap: 9px;
+    gap: 8px;
     min-width: 0;
   }
 
   .recent .name {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -253,14 +218,9 @@
   }
 
   @media (max-width: 640px) {
-    .links {
-      margin-left: 0;
-      width: 100%;
-    }
-
     .recent {
+      gap: 10px 24px;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px 20px;
     }
   }
 </style>

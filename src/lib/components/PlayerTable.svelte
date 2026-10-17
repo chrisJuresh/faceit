@@ -17,6 +17,7 @@
   import Avatar from './Avatar.svelte';
   import Chevron from './Chevron.svelte';
   import Elo from './Elo.svelte';
+  import type { FormMetric } from './FormChart.svelte';
   import PlayerDetail from './PlayerDetail.svelte';
   import ResultStrip from './ResultStrip.svelte';
 
@@ -32,6 +33,8 @@
   let sortKey = $state('elo');
   let direction = $state<'asc' | 'desc'>('desc');
   let openId = $state<string | null>(null);
+  /** The detail chart's metric, kept when another player is opened. */
+  let formMetric = $state<FormMetric>('adr');
 
   // Duel and utility numbers only exist in FACEIT's lifetime record.
   const scope = $derived<Scope>(view === 'duels' ? 'lifetime' : chosenScope);
@@ -77,7 +80,8 @@
   function aroundOne(column: Column, player: SquadPlayer) {
     if (!column.aroundOne) return '';
     const value = column.value(player, scope);
-    return value === null ? '' : value >= 1 ? 'pos' : 'neg';
+    // Judge the value as shown, so 0.996 (shown as 1.00) is not coloured as below 1.
+    return value === null ? '' : Number(value.toFixed(column.digits)) >= 1 ? 'pos' : 'neg';
   }
 
   const toggle = (player: SquadPlayer) => (openId = openId === player.playerId ? null : player.playerId);
@@ -104,99 +108,102 @@
   </div>
 </div>
 
-<div class="scroll">
-  <table class="tbl players">
-    <thead>
-      <tr class="groups">
-        <th class="stick"></th>
-        <th></th>
-        {#each groups as group (group.label)}
-          <th colspan={group.columns.length} class="group gs">{group.label}</th>
-        {/each}
-      </tr>
-      <tr class="cols">
-        <th class="l stick" class:sorted={sorting.key === 'name'} scope="col" aria-sort={ariaSort('name')}>
-          <button type="button" class="sort" onclick={() => sortBy('name')}>
-            Player{#if sorting.key === 'name'}<span class="arrow after" aria-hidden="true">{sorting.direction === 'asc' ? '▲' : '▼'}</span>{/if}
-          </button>
-        </th>
-        {#each columns as column (column.key)}
-          <th
-            scope="col"
-            class:gs={starts.has(column.key)}
-            class:sorted={sorting.key === column.key}
-            aria-sort={column.strip ? undefined : ariaSort(column.key)}
-            title={column.title}
-          >
-            {#if column.strip}
-              {column.label}
-            {:else}
-              <button type="button" class="sort" onclick={() => sortBy(column.key)}>
-                <span class="arrow" aria-hidden="true">{sorting.key === column.key ? (sorting.direction === 'asc' ? '▲' : '▼') : ''}</span>{column.label}
-              </button>
-            {/if}
-          </th>
-        {/each}
-      </tr>
-    </thead>
-    <tbody>
-      {#each rows as player (player.playerId)}
-        {@const open = openId === player.playerId}
-        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-        <tr class="row" class:open class:low={isLowSample(player, view, scope)} onclick={() => toggle(player)}>
-          <th class="l stick" scope="row">
-            <span class="who">
-              <Avatar src={player.avatar} name={player.displayName} />
-              <button
-                type="button"
-                class="name"
-                aria-expanded={open}
-                onclick={(event) => {
-                  event.stopPropagation();
-                  toggle(player);
-                }}>{player.displayName}</button
-              >
-              {#if player.country}<span class="cc">{player.country}</span>{/if}
-              {#if liveIds.has(player.playerId)}<span class="in-match" title="In a match"><span class="sr-only">In a match</span></span>{/if}
-              <span class="push"><Chevron /></span>
-            </span>
-          </th>
-          {#each columns as column (column.key)}
-            {#if column.key === 'elo'}
-              <td class:sorted={sorting.key === 'elo'}>
-                <Elo elo={player.elo} level={player.level} />
-              </td>
-            {:else if column.strip}
-              <td class="gs">
-                <ResultStrip results={player.recent.slice(0, 10).reverse().map((match) => match.won)} />
-              </td>
-            {:else}
-              <td
-                class="{aroundOne(column, player)}"
-                class:gs={starts.has(column.key)}
-                class:sorted={sorting.key === column.key}
-                class:low={muted(column, player)}
-              >
-                {cellText(column, player)}
-              </td>
-            {/if}
+{#if rows.length}
+  <div class="scroll">
+    <table class="tbl players">
+      <thead>
+        <tr class="groups">
+          <th class="stick"></th>
+          <th></th>
+          {#each groups as group (group.label)}
+            <th colspan={group.columns.length} class="group gs">{group.label}</th>
           {/each}
         </tr>
-        {#if open}
-          <tr class="detail">
-            <td colspan={columns.length + 1}>
-              <div class="pin">
-                <PlayerDetail {player} {now} {isOwner} />
-              </div>
-            </td>
+        <tr class="cols">
+          <th class="l stick" class:sorted={sorting.key === 'name'} scope="col" aria-sort={ariaSort('name')}>
+            <button type="button" class="sort" onclick={() => sortBy('name')}>
+              Player{#if sorting.key === 'name'}<span class="arrow after" aria-hidden="true">{sorting.direction === 'asc' ? '▲' : '▼'}</span>{/if}
+            </button>
+          </th>
+          {#each columns as column (column.key)}
+            <th
+              scope="col"
+              class:gs={starts.has(column.key)}
+              class:sorted={sorting.key === column.key}
+              aria-sort={column.strip ? undefined : ariaSort(column.key)}
+              title={column.title}
+            >
+              {#if column.strip}
+                {column.label}
+              {:else}
+                <button type="button" class="sort" onclick={() => sortBy(column.key)}>
+                  <span class="arrow" aria-hidden="true">{sorting.key === column.key ? (sorting.direction === 'asc' ? '▲' : '▼') : ''}</span>{column.label}
+                </button>
+              {/if}
+            </th>
+          {/each}
+        </tr>
+      </thead>
+      <tbody>
+        {#each rows as player (player.playerId)}
+          {@const open = openId === player.playerId}
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+          <tr class="row" class:open class:low={isLowSample(player, view, scope)} onclick={() => toggle(player)}>
+            <th class="l stick" scope="row">
+              <span class="who">
+                <Avatar src={player.avatar} name={player.displayName} />
+                <button
+                  type="button"
+                  class="name"
+                  aria-expanded={open}
+                  onclick={(event) => {
+                    event.stopPropagation();
+                    toggle(player);
+                  }}
+                  title={player.displayName}><span>{player.displayName}</span></button
+                >
+                {#if player.country}<span class="cc">{player.country}</span>{/if}
+                {#if liveIds.has(player.playerId)}<span class="in-match" title="In a match"><span class="sr-only">In a match</span></span>{/if}
+                <span class="push"><Chevron /></span>
+              </span>
+            </th>
+            {#each columns as column (column.key)}
+              {#if column.key === 'elo'}
+                <td class:sorted={sorting.key === 'elo'}>
+                  <Elo elo={player.elo} level={player.level} />
+                </td>
+              {:else if column.strip}
+                <td class="gs">
+                  <ResultStrip results={player.recent.slice(0, 10).reverse().map((match) => match.won)} />
+                </td>
+              {:else}
+                <td
+                  class="{aroundOne(column, player)}"
+                  class:gs={starts.has(column.key)}
+                  class:sorted={sorting.key === column.key}
+                  class:low={muted(column, player)}
+                >
+                  {cellText(column, player)}
+                </td>
+              {/if}
+            {/each}
           </tr>
-        {/if}
-      {:else}
-        <tr><td class="l muted" colspan={columns.length + 1}>No players</td></tr>
-      {/each}
-    </tbody>
-  </table>
-</div>
+          {#if open}
+            <tr class="detail">
+              <td colspan={columns.length + 1}>
+                <div class="pin">
+                  <PlayerDetail {player} {now} {isOwner} bind:metric={formMetric} />
+                </div>
+              </td>
+            </tr>
+          {/if}
+        {/each}
+      </tbody>
+    </table>
+  </div>
+{:else}
+  <p class="none">No players</p>
+{/if}
 
 <style>
   .players button.name {
@@ -215,11 +222,12 @@
     background: var(--accent);
     border-radius: 50%;
     flex: none;
-    height: 7px;
-    width: 7px;
+    height: 8px;
+    width: 8px;
   }
 
   .push {
+    flex: none;
     margin-left: auto;
     padding-left: 10px;
   }

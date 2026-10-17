@@ -65,8 +65,10 @@
             <span class="team-label">
               {teamName(team)}
               <span class="team-sub">
-                {#if team.score !== null}<span class="res" class:win={team.won} class:loss={!team.won}>{team.score}</span>{/if}
-                {#if team.averageElo}&nbsp;· avg ELO {thousands(team.averageElo)}{/if}
+                {#if team.score !== null}<span class="res" class:win={team.won} class:loss={!team.won}>{team.won ? 'W' : 'L'}</span>
+                  <span class="mono">{team.score}</span>{/if}
+                {team.score !== null ? ' · ' : ''}avg ELO
+                <span class="mono">{team.averageElo ? thousands(team.averageElo) : '—'}</span>
               </span>
             </span>
           </th>
@@ -86,14 +88,19 @@
                     class="name"
                     class:other={!player.isOwner && !player.isFriend}
                     aria-expanded={open}
+                    title={player.displayName}
                     onclick={(event) => {
                       event.stopPropagation();
                       toggle(player);
-                    }}>{player.displayName}</button
+                    }}><span>{player.displayName}</span></button
                   >
+                  {#if player.country}<span class="cc">{player.country}</span>{/if}
                   <span class="push"><Chevron /></span>
                 {:else}
-                  <span class="name" class:other={!player.isOwner && !player.isFriend}>{player.displayName}</span>
+                  <span class="name" class:other={!player.isOwner && !player.isFriend} title={player.displayName}>
+                    {player.displayName}
+                  </span>
+                  {#if player.country}<span class="cc">{player.country}</span>{/if}
                 {/if}
               </span>
             </th>
@@ -141,34 +148,6 @@
 </div>
 
 <style>
-  .team th {
-    border-bottom: 1px solid var(--rule-2);
-    font-weight: 600;
-    height: 38px;
-    padding-top: 10px;
-  }
-
-  tbody:first-of-type .team th {
-    height: 30px;
-    padding-top: 4px;
-  }
-
-  .team-label {
-    display: inline-block;
-    left: 7px;
-    position: sticky;
-  }
-
-  .team-sub {
-    color: var(--muted);
-    font: 400 11.5px var(--mono);
-    margin-left: 12px;
-  }
-
-  .team-sub .res {
-    font-size: 11.5px;
-  }
-
   button.name {
     background: none;
     border: 0;
@@ -178,6 +157,7 @@
   }
 
   .push {
+    flex: none;
     margin-left: auto;
     padding-left: 10px;
   }

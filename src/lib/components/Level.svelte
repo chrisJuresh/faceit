@@ -6,7 +6,7 @@
 </script>
 
 <span class="level" style:--ring={levelVar(level)} role="img" aria-label="Level {level || 'unknown'}">
-  {level || '–'}
+  {level || '—'}
 </span>
 
 <style>
@@ -17,7 +17,7 @@
     color: var(--ink);
     display: inline-flex;
     flex: none;
-    font: 500 10px/1 var(--mono);
+    font: 500 10.5px/1 var(--mono);
     height: 20px;
     justify-content: center;
     width: 20px;

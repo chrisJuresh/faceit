@@ -4,6 +4,7 @@
   import type { GroupGame, LiveMatch, SquadPlayer } from '$lib/types';
   import Avatar from './Avatar.svelte';
   import Chevron from './Chevron.svelte';
+  import MapImage from './MapImage.svelte';
   import Scoreboard from './Scoreboard.svelte';
 
   let {
@@ -21,13 +22,15 @@
   const PAGE = 10;
   let showAll = $state(false);
   let open = $state<Record<string, boolean>>({});
-  /** Full scoreboards, fetched when asked for. */
+  /** Which games show their full scoreboard. */
+  let showBoard = $state<Record<string, boolean>>({});
+  /** Full scoreboards, fetched when first asked for. */
   let boards = $state.raw<Record<string, LiveMatch | 'loading' | 'error'>>({});
 
   const shown = $derived(showAll ? games : games.slice(0, PAGE));
   const name = (id: string) => players.get(id)?.displayName ?? 'Unknown';
 
-  async function fullScoreboard(game: GroupGame) {
+  async function fetchBoard(game: GroupGame) {
     const current = boards[game.matchId];
     if (current !== undefined && current !== 'error') return;
     boards = { ...boards, [game.matchId]: 'loading' };
@@ -36,6 +39,11 @@
     } catch {
       boards = { ...boards, [game.matchId]: 'error' };
     }
+  }
+
+  function toggleBoard(game: GroupGame) {
+    showBoard[game.matchId] = !showBoard[game.matchId];
+    if (showBoard[game.matchId]) void fetchBoard(game);
   }
 </script>
 
@@ -47,7 +55,7 @@
       <button type="button" class="game" aria-expanded={expanded} onclick={() => (open[game.key] = !expanded)}>
         <span class="when" title={dateTime(game.finishedAt)}>{age(game.finishedAt, now)}</span>
         <span class="map">
-          {#if mapImages[game.map]}<img class="thumb" src={mapImages[game.map]} alt="" loading="lazy" />{:else}<span class="thumb"></span>{/if}
+          <MapImage src={mapImages[game.map] ?? ''} size="small" />
           <span>{game.map}</span>
         </span>
         <span class="result">
@@ -57,7 +65,7 @@
         <span class="lines">
           {#each game.lines as line (line.playerId)}
             <span class="line">
-              <span class="who-name">{name(line.playerId)}</span>
+              <span class="line-name" title={name(line.playerId)}>{name(line.playerId)}</span>
               <span class="kd">{line.kills}–{line.deaths}</span>
               <span class="adr">{fixed(line.adr, 1)}</span>
             </span>
@@ -66,7 +74,7 @@
         <Chevron />
       </button>
       {#if expanded}
-        <div class="detail">
+        <div class="detail on-band">
           <div class="scroll">
             <table class="mini">
               <thead>
@@ -90,12 +98,12 @@
                   {@const player = players.get(line.playerId)}
                   {@const diff = line.kills - line.deaths}
                   <tr>
-                    <td class="l">
+                    <th class="l" scope="row">
                       <span class="who">
-                        <Avatar src={player?.avatar ?? ''} name={name(line.playerId)} size={18} />
-                        <span>{name(line.playerId)}</span>
+                        <Avatar src={player?.avatar ?? ''} name={name(line.playerId)} />
+                        <span class="name" title={name(line.playerId)}>{name(line.playerId)}</span>
                       </span>
-                    </td>
+                    </th>
                     <td>{line.kills}</td>
                     <td>{line.deaths}</td>
                     <td>{line.assists}</td>
@@ -112,19 +120,26 @@
               </tbody>
             </table>
           </div>
-          <p class="foot">
-            <span class="mono muted">{dateTime(game.finishedAt)} · {game.rounds} rounds</span>
-            {#if board === undefined || board === 'error'}
-              <button class="text-button" type="button" onclick={() => fullScoreboard(game)}>Full scoreboard</button>
+          <div class="foot">
+            <span class="muted"><span class="mono">{dateTime(game.finishedAt)}</span> · <span class="mono">{game.rounds}</span> rounds</span>
+            <span class="actions">
+              <button class="text-button" type="button" onclick={() => toggleBoard(game)}>
+                {showBoard[game.matchId] ? 'Hide scoreboard' : 'Full scoreboard'}
+              </button>
+              <a class="ext" href={roomUrl(game.matchId)} target="_blank" rel="noreferrer">Match room ↗</a>
+            </span>
+          </div>
+          {#if showBoard[game.matchId]}
+            {#if board === 'loading' || board === undefined}
+              <p class="none">Loading scoreboard…</p>
+            {:else if board === 'error'}
+              <p class="none">
+                FACEIT didn't return this match
+                <button class="text-button retry" type="button" onclick={() => fetchBoard(game)}>Try again</button>
+              </p>
+            {:else}
+              <div class="board"><Scoreboard match={board} /></div>
             {/if}
-            <a class="ext" href={roomUrl(game.matchId)} target="_blank" rel="noreferrer">Match room ↗</a>
-          </p>
-          {#if board === 'loading'}
-            <p class="none">Loading scoreboard…</p>
-          {:else if board === 'error'}
-            <p class="none">FACEIT didn't return this match</p>
-          {:else if board}
-            <div class="board"><Scoreboard match={board} /></div>
           {/if}
         </div>
       {/if}
@@ -136,7 +151,7 @@
     </button>
   {/if}
 {:else}
-  <p class="none">No games together in this window</p>
+  <p class="none">No games together</p>
 {/if}
 
 <style>
@@ -152,7 +167,7 @@
     cursor: pointer;
     display: grid;
     gap: 0 16px;
-    grid-template-columns: 44px 150px 76px minmax(0, 1fr) 10px;
+    grid-template-columns: 52px 150px 72px minmax(0, 1fr) 14px;
     min-height: 46px;
     padding: 6px 4px;
     text-align: left;
@@ -176,8 +191,7 @@
   .map {
     align-items: center;
     display: flex;
-    gap: 10px;
-    font-weight: 500;
+    gap: 8px;
     min-width: 0;
   }
 
@@ -188,32 +202,40 @@
   }
 
   .score {
-    font: 12.5px var(--mono);
+    font: 12px var(--mono);
   }
 
   .lines {
     display: flex;
     flex-wrap: wrap;
-    gap: 3px 22px;
+    gap: 4px 22px;
+    min-width: 0;
   }
 
   .line {
     align-items: baseline;
     display: inline-flex;
-    gap: 7px;
+    gap: 8px;
+    max-width: 100%;
+    min-width: 0;
     white-space: nowrap;
   }
 
-  .who-name {
+  .line-name {
     color: var(--ink-2);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .kd {
+    flex: none;
     font: 12px var(--mono);
   }
 
   .adr {
     color: var(--muted);
+    flex: none;
     font: 11.5px var(--mono);
   }
 
@@ -221,15 +243,11 @@
     --surface: var(--band);
     background: var(--band);
     border-bottom: 1px solid var(--rule-2);
-    padding: 6px 12px 14px;
+    padding: 12px 16px 18px;
   }
 
   .detail .mini {
     max-width: 900px;
-  }
-
-  .detail .who {
-    gap: 8px;
   }
 
   .mini td.muted {
@@ -241,8 +259,19 @@
     display: flex;
     flex-wrap: wrap;
     font-size: 11.5px;
-    gap: 6px 20px;
+    gap: 6px 14px;
     margin-top: 10px;
+    max-width: 900px;
+  }
+
+  .actions {
+    display: flex;
+    gap: 16px;
+    margin-left: auto;
+  }
+
+  .retry {
+    margin-left: 12px;
   }
 
   .board {
@@ -253,11 +282,10 @@
     margin-top: 10px;
   }
 
-  @media (max-width: 760px) {
+  @media (max-width: 860px) {
     .game {
-      gap: 6px 10px;
-      grid-template-columns: minmax(0, 1fr) auto 10px;
-      padding: 10px 0;
+      grid-template-columns: minmax(0, 1fr) auto 14px;
+      row-gap: 6px;
     }
 
     .when {
@@ -285,9 +313,15 @@
       grid-column: 1 / -1;
       grid-row: 3;
     }
+  }
 
+  @media (max-width: 640px) {
     .detail {
-      padding: 6px 0 14px;
+      padding: 12px 12px 18px;
+    }
+
+    .actions {
+      margin-left: 0;
     }
   }
 </style>

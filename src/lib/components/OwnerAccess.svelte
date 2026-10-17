@@ -28,12 +28,12 @@
   <dialog bind:this={dialog} aria-labelledby="owner-title">
     <form method="POST" action="?/unlock" use:enhance={unlock}>
       <h2 id="owner-title">Edit display names</h2>
-      <label for="owner-token">Access key</label>
-      <input id="owner-token" name="token" type="password" autocomplete="current-password" required />
+      <label class="field-label" for="owner-token">Access key</label>
+      <input id="owner-token" class="input" name="token" type="password" autocomplete="current-password" required />
       {#if error}<p class="error">{error}</p>{/if}
       <div class="actions">
         <button type="button" class="text-button" onclick={() => dialog?.close()}>Cancel</button>
-        <button type="submit" class="primary">Unlock</button>
+        <button type="submit" class="text-button primary">Unlock</button>
       </div>
     </form>
   </dialog>
@@ -57,7 +57,7 @@
   }
 
   dialog::backdrop {
-    background: rgb(0 0 0 / 0.5);
+    background: color-mix(in srgb, var(--page) 70%, transparent);
   }
 
   dialog form {
@@ -71,46 +71,16 @@
     margin-bottom: 6px;
   }
 
-  label {
-    color: var(--muted);
-    font-size: 12px;
-  }
-
-  input {
-    background: transparent;
-    border: 0;
-    border-bottom: 1px solid var(--rule-2);
-    color: var(--ink);
-    font-size: 13px;
-    padding: 4px 0;
-  }
-
-  input:focus {
-    border-bottom-color: var(--accent);
-    outline: none;
-  }
-
-  .error {
-    color: var(--loss-text);
-    font-size: 12px;
-  }
-
   .actions {
     align-items: baseline;
     display: flex;
-    gap: 18px;
+    gap: 16px;
     justify-content: flex-end;
     margin-top: 10px;
   }
 
+  /* The dialog's main action: the same text button, in full ink. */
   .primary {
-    background: var(--ink);
-    border: 0;
-    border-radius: 2px;
-    color: var(--page);
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 600;
-    padding: 6px 14px;
+    color: var(--ink);
   }
 </style>

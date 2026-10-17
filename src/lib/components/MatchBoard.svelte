@@ -1,17 +1,13 @@
 <script lang="ts">
-  import { duration, score, thousands } from '$lib/format';
+  import { clockUtc, duration, score, thousands } from '$lib/format';
   import { sides, teamName } from '$lib/match-board';
   import type { LiveMatch } from '$lib/types';
-  import { onMount } from 'svelte';
+  import MapImage from './MapImage.svelte';
   import Roster from './Roster.svelte';
   import Scoreboard from './Scoreboard.svelte';
 
   /** Everything FACEIT publishes about one match. The map art shrinks to a thumbnail once it's over. */
   let { match }: { match: LiveMatch } = $props();
-
-  // Wall-clock times differ between server and browser, so they appear once the page is live.
-  let mounted = $state(false);
-  onMount(() => (mounted = true));
 
   const finished = $derived(match.phase === 'finished');
   const { ours, theirs } = $derived(sides(match));
@@ -24,14 +20,13 @@
   );
   const server = $derived([match.location?.name, match.region].filter(Boolean).join(' · ') || '—');
 
-  const clockTime = (timestamp: number) =>
-    new Date(timestamp * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const averageElo = (elo: number) => (elo ? thousands(elo) : '—');
 
   const liveFacts = $derived<Array<[string, string, boolean]>>([
     ['Queue', match.competition || '—', false],
     ['Server', server, false],
     ['Format', `BO${match.bestOf || 1} · ${match.calculateElo ? 'ELO' : 'no ELO'}`, false],
-    ['Started', match.startedAt && mounted ? clockTime(match.startedAt) : '—', true]
+    ['Started', match.startedAt ? clockUtc(match.startedAt) : '—', true]
   ]);
 
   /** Label, value, and whether the value is a number (set in the mono face). */
@@ -47,7 +42,7 @@
         facts.push(['Overtime', score(ours.overtime, theirs.overtime), true]);
     }
     if (match.rounds) facts.push(['Rounds', String(match.rounds), true]);
-    if (match.startedAt && match.finishedAt) facts.push(['Length', duration(match.finishedAt - match.startedAt), true]);
+    if (match.startedAt && match.finishedAt) facts.push(['Duration', duration(match.finishedAt - match.startedAt), true]);
     facts.push(['Server', server, false]);
     return facts;
   });
@@ -55,7 +50,7 @@
 
 {#if finished}
   <div class="finished-top">
-    {#if image}<img class="map-thumb" src={image} alt="" />{/if}
+    <MapImage src={image} size="medium" lazy={false} />
     <p class="score">
       {#if ours && ours.score !== null}
         <span class="res" class:win={ours.won} class:loss={!ours.won}>{ours.won ? 'W' : 'L'}</span>{score(ours.score, theirs?.score)}
@@ -70,7 +65,7 @@
   <Scoreboard {match} />
 {:else}
   <div class="live-top">
-    {#if image}<img class="map-art" src={image} alt="" />{:else}<span class="map-art"></span>{/if}
+    <MapImage src={image} size="large" lazy={false} />
     <div>
       <p class="map-name">{mapName}</p>
       <dl class="kv facts">
@@ -91,7 +86,8 @@
           </div>
         {/if}
         <p class="row sub">
-          <span>avg ELO {thousands(ours.averageElo)}</span><span>avg ELO {thousands(theirs.averageElo)}</span>
+          <span>avg ELO <span class="mono">{averageElo(ours.averageElo)}</span></span>
+          <span>avg ELO <span class="mono">{averageElo(theirs.averageElo)}</span></span>
         </p>
       </div>
     {/if}
@@ -106,15 +102,6 @@
     gap: 32px;
     grid-template-columns: 192px minmax(0, 1fr) minmax(0, 1.35fr);
     margin-bottom: 22px;
-  }
-
-  .map-art {
-    aspect-ratio: 16 / 9;
-    background: var(--cell);
-    border-radius: 2px;
-    display: block;
-    object-fit: cover;
-    width: 100%;
   }
 
   .map-name {
@@ -179,7 +166,7 @@
 
   .sub {
     color: var(--muted);
-    font: 11.5px var(--mono);
+    font-size: 11.5px;
   }
 
   .finished-top {
@@ -188,14 +175,6 @@
     gap: 28px;
     grid-template-columns: auto auto minmax(0, 1fr);
     margin-bottom: 20px;
-  }
-
-  .map-thumb {
-    background: var(--cell);
-    border-radius: 2px;
-    height: 32px;
-    object-fit: cover;
-    width: 56px;
   }
 
   .score {
