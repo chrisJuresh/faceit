@@ -34,10 +34,13 @@ import {
 
 const OWNER_NICKNAME = env.FACEIT_OWNER_NICKNAME || 'Christian976';
 const DAY = 86_400;
-/** Group numbers cover this many days; busy players get extra pages to reach back that far. */
+/** Group numbers cover this many days, except the Maps Together row, which reads whole histories. */
 export const WINDOW_DAYS = 90;
 const PAGE_SIZE = 100;
-/** 1,500 maps in 90 days. Past that the window shrinks to what was read rather than undercount. */
+/**
+ * Up to 1,500 matches per player, enough for every lifetime in the group so far. A history that
+ * runs past it is marked as read only so far back, and nothing older is claimed.
+ */
 const MAX_PAGES = 15;
 const RECENT_MATCHES = 30;
 const GROUP_GAMES = 40;
@@ -190,43 +193,49 @@ export function parseLifetime(stats: FaceitLifetimeStats | null, maps: MapStats[
 }
 
 /**
- * Latest page of matches, plus older pages while they still fall inside the window. `readFrom` is
- * how far back the matches are complete: null when the window (or the whole history) was read,
- * otherwise the oldest time read, because the page cap was hit or an older page failed.
+ * A player's match history, newest first. Each older page asks for matches up to the oldest one
+ * seen so far, since FACEIT refuses offsets past 200. `readFrom` is how far back the history is
+ * complete: null when it was read to the start, otherwise the oldest time read, because the page
+ * cap was hit or an older page failed.
  */
-async function recentMatches(playerId: string, windowStart: number) {
+async function matchHistory(playerId: string) {
   const matches: HistoryMatch[] = [];
   const seen = new Set<string>();
   let readFrom: number | null = null;
-  let toMs: number | undefined;
+  let before: number | undefined;
 
   for (let page = 0; page < MAX_PAGES; page += 1) {
-    const request = getPlayerGameStats(playerId, 0, PAGE_SIZE, toMs);
+    const request = getPlayerGameStats(playerId, 0, PAGE_SIZE, before);
     // A failed older page shouldn't throw away the newer matches already parsed.
     const response = page === 0 ? await request : await request.catch(() => null);
     if (!response) {
-      readFrom = toMs ? Math.ceil(toMs / 1000) : null;
+      readFrom = before === undefined ? null : Math.ceil(before / 1000);
       break;
     }
     const items = response.items || [];
+    const known = seen.size;
     for (const item of items) {
-      const match = parsePlayerMatch(item);
-      const key = match ? `${match.matchId}:${match.mapNumber}` : '';
-      if (!match || seen.has(key)) continue;
+      // Keyed before parsing, so a page of only wingman still counts as new and paging goes on.
+      const stats = item.stats as Stats;
+      const key = `${stats['Match Id']}:${stats['Match Round']}`;
+      if (seen.has(key)) continue;
       seen.add(key);
-      matches.push(match);
+      const match = parsePlayerMatch(item);
+      if (match) matches.push(match);
     }
 
-    const oldestStats = items.length ? (items[items.length - 1].stats as Stats) : null;
-    const oldest = oldestStats ? timestamp(oldestStats) : 0;
-    if (items.length < PAGE_SIZE || oldest < windowStart) break;
+    // A page with nothing new is the end.
+    if (items.length < PAGE_SIZE || seen.size === known) break;
+    const oldestStats = items[items.length - 1].stats as Stats;
+    const oldest = timestamp(oldestStats);
     if (page === MAX_PAGES - 1) {
       readFrom = oldest;
       break;
     }
-    // `to` is exclusive, so step one millisecond past the oldest match and de-duplicate.
-    const finished = oldestStats?.['Match Finished At'];
-    toMs = (typeof finished === 'number' && finished > 1e12 ? finished : oldest * 1000) + 1;
+    // `to` leaves out a match finishing at exactly that millisecond, so step one past the oldest
+    // and let the boundary match come back as a duplicate.
+    const finished = oldestStats['Match Finished At'];
+    before = (typeof finished === 'number' && finished > 1e12 ? finished : oldest * 1000) + 1;
   }
 
   return { matches: matches.sort((a, b) => b.finishedAt - a.finishedAt), readFrom };
@@ -245,10 +254,7 @@ async function buildPlayer(
   const [lifetimeStats, { matches, readFrom }] = await Promise.all([
     getLifetimeStats(profile.player_id).catch(() => null),
     // Nothing read: every count from these matches is unknown rather than zero.
-    recentMatches(profile.player_id, now - WINDOW_DAYS * DAY).catch(() => ({
-      matches: [] as HistoryMatch[],
-      readFrom: now as number | null
-    }))
+    matchHistory(profile.player_id).catch(() => ({ matches: [] as HistoryMatch[], readFrom: now as number | null }))
   ]);
   /** Matches since `start`, or null when the matches read don't reach back that far. */
   const since = (start: number) => (readFrom !== null && readFrom > start ? null : countSince(matches, start));
@@ -329,15 +335,18 @@ export async function buildSquad(): Promise<SquadOverview> {
   );
 
   const histories = built.map(({ player, matches, readFrom }) => ({ playerId: player.playerId, matches, readFrom }));
-  // If a busy player's pages ran out before 90 days, group numbers cover only as far back as
-  // every read reaches, rather than miss that player's older games. A read that failed outright
-  // (readFrom = now) can't shrink it to nothing; that player's activity shows as unknown instead.
+  // A history cut short (page cap or a failed older page) misses that player's older games, and a
+  // group game needs two of the group's lines. So group numbers only reach back as far as every
+  // history does: the 90-day window shrinks and says so, and so does the Together record. A read
+  // that failed outright (readFrom = now) can't shrink them to nothing; that player shows unknown.
   const reached = built
     .map(({ readFrom }) => readFrom)
     .filter((readFrom): readFrom is number => readFrom !== null && readFrom < now);
-  const windowStart = Math.max(now - WINDOW_DAYS * DAY, ...reached);
+  const togetherFrom = reached.length ? Math.max(...reached) : null;
+  const windowStart = Math.max(now - WINDOW_DAYS * DAY, togetherFrom ?? 0);
   const windowDays = Math.floor((now - windowStart) / DAY);
-  const games = groupGames(histories).filter((game) => game.finishedAt >= windowStart);
+  const everGames = groupGames(histories).filter((game) => togetherFrom === null || game.finishedAt >= togetherFrom);
+  const games = everGames.filter((game) => game.finishedAt >= windowStart);
 
   const mapImages: Record<string, string> = {};
   for (const { player } of built) {
@@ -353,7 +362,8 @@ export async function buildSquad(): Promise<SquadOverview> {
     players: built.map(({ player }) => player).sort((a, b) => b.elo - a.elo),
     mapImages,
     games: games.slice(0, GROUP_GAMES),
-    lineups: games.map(toLineup),
+    lineups: everGames.map(toLineup),
+    togetherFrom,
     together: { matches: games.length, wins: games.filter((game) => game.won).length },
     pairs: pairRecords(games),
     activity: recentActivity(histories, ACTIVITY_DAYS, ACTIVITY_WEEKS, now)

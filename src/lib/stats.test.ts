@@ -179,6 +179,12 @@ describe('together maps', () => {
     expect(maps.get('Mirage')).toEqual({ map: 'Mirage', matches: 1, wins: 1, kills: 20, deaths: 10 });
     expect(maps.has('Dust2')).toBe(false);
   });
+
+  it('stops after the latest `limit` games the chosen played together', () => {
+    const maps = togetherMaps(lineups, new Set(['b', 'c']), 1);
+    expect(maps.get('Mirage')?.matches).toBe(1);
+    expect(maps.has('Dust2')).toBe(false);
+  });
 });
 
 describe('weekly activity', () => {

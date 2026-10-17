@@ -184,7 +184,7 @@
     </section>
 
     <section id="maps" class="section">
-      <MapPool players={shown} lineups={squad.lineups} mapImages={squad.mapImages} windowDays={squad.windowDays} />
+      <MapPool players={shown} lineups={squad.lineups} togetherFrom={squad.togetherFrom} mapImages={squad.mapImages} />
     </section>
 
     <!-- Full sections in their own right, with the same heading and spacing as the rest. -->
