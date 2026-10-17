@@ -17,6 +17,7 @@
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
   let theme = $state<'light' | 'dark'>('dark');
+  let everyone = $state(false);
   let refreshing = $state(false);
   // Starts at the data's own timestamp so the server render and hydration agree, then ticks.
   // svelte-ignore state_referenced_locally
@@ -26,8 +27,11 @@
   const poll = new LivePoll(data.live);
 
   const squad = $derived(data.squad);
-  const byId = $derived(new Map((squad?.players ?? []).map((player) => [player.playerId, player])));
-  const active = $derived((squad?.players ?? []).filter(isActive));
+  const players = $derived(squad?.players ?? []);
+  const byId = $derived(new Map(players.map((player) => [player.playerId, player])));
+  const activeCount = $derived(players.filter(isActive).length);
+  /** The masthead's Active / All choice applies to every per-player view. */
+  const shown = $derived(everyone ? players : players.filter(isActive));
   const liveIds = $derived(
     new Set(
       (poll.overview?.matches ?? [])
@@ -35,6 +39,7 @@
         .flatMap((match) => match.trackedPlayerIds)
     )
   );
+  const together = $derived(squad?.together ?? { matches: 0, wins: 0 });
 
   // A full refresh brings a newer overview than the last poll.
   $effect(() => {
@@ -53,11 +58,11 @@
     };
   });
 
-  function toggleTheme() {
-    theme = theme === 'dark' ? 'light' : 'dark';
-    document.documentElement.dataset.theme = theme;
+  function setTheme(next: 'light' | 'dark') {
+    theme = next;
+    document.documentElement.dataset.theme = next;
     try {
-      localStorage.setItem('stackline-theme', theme);
+      localStorage.setItem('stackline-theme', next);
     } catch {
       // Private windows can refuse storage; the choice still applies to this visit.
     }
@@ -77,14 +82,13 @@
   <title>Stackline</title>
 </svelte:head>
 
-<header class="wrap masthead">
-  <div class="top">
+<header class="masthead">
+  <div class="wrap bar">
     <a class="wordmark" href="/">Stackline</a>
     <nav aria-label="Sections">
       <a href="#live">Live</a>
       {#if squad}
         <a href="#players">Players</a>
-        <a href="#elo">ELO</a>
         <a href="#maps">Maps</a>
         <a href="#games">Games</a>
         <a href="#duos">Duos</a>
@@ -92,86 +96,87 @@
     </nav>
     <div class="tools">
       {#if squad}
-        <span class="updated" title={dateTime(squad.generatedAt)}>
+        <span class="stamp" title={dateTime(squad.generatedAt)}>
           {refreshing ? 'Refreshing…' : `Updated ${timeAgo(squad.generatedAt, Math.max(clock, squad.generatedAt))}`}
         </span>
         <button class="text-button" type="button" onclick={refresh} disabled={refreshing}>Refresh</button>
+        <div class="seg" role="group" aria-label="Players shown">
+          <button type="button" aria-pressed={!everyone} onclick={() => (everyone = false)}>
+            Active<span class="count">{activeCount}</span>
+          </button>
+          <button type="button" aria-pressed={everyone} onclick={() => (everyone = true)}>
+            All<span class="count">{players.length}</span>
+          </button>
+        </div>
       {/if}
-      <button class="text-button" type="button" onclick={toggleTheme}>
-        {theme === 'dark' ? 'Light' : 'Dark'} mode
-      </button>
+      <div class="seg theme" role="group" aria-label="Theme">
+        <button type="button" class="dark" aria-pressed={theme === 'dark'} onclick={() => setTheme('dark')}>Dark</button>
+        <button type="button" class="light" aria-pressed={theme === 'light'} onclick={() => setTheme('light')}>Light</button>
+      </div>
     </div>
   </div>
 </header>
 
-<main>
-  <LiveSection
-    overview={poll.overview}
-    failed={poll.failed}
-    now={clock}
-    players={squad?.players ?? []}
-    games={squad?.games ?? []}
-  />
+<LiveSection overview={poll.overview} failed={poll.failed} now={clock} {players} games={squad?.games ?? []} />
 
-  <!-- Highlights from match demos go here: a full-width section between Live and Players. -->
+<!-- Highlights from match demos go here: a full-width band between Live and Players. -->
 
+<main class="wrap">
   {#if squad}
-    <section id="players" class="wrap section">
-      <PlayerTable players={squad.players} now={squad.generatedAt} isOwner={data.isOwner} {liveIds} />
+    <section id="players" class="section">
+      <PlayerTable players={shown} now={squad.generatedAt} isOwner={data.isOwner} {liveIds} />
+
+      <div class="pair">
+        <section aria-labelledby="elo-head">
+          <div class="sub-head">
+            <h3 id="elo-head">ELO</h3>
+            <span class="legend"><span class="key"><i class="line"></i>To next level</span></span>
+          </div>
+          <EloLadder players={shown} />
+        </section>
+        <section aria-labelledby="activity-head">
+          <div class="sub-head">
+            <h3 id="activity-head">Activity</h3>
+            <span class="meta">Matches per week</span>
+          </div>
+          <Activity activity={squad.activity} players={shown} />
+        </section>
+      </div>
     </section>
 
-    <div class="wrap section pair">
-      <section id="elo">
-        <div class="section-head">
-          <h2>ELO</h2>
-          <span class="meta">FACEIT levels</span>
-        </div>
-        <EloLadder players={active} />
-      </section>
-      <section id="activity">
-        <div class="section-head">
-          <h2>Activity</h2>
-          <span class="meta">Matches per week</span>
-        </div>
-        <Activity activity={squad.activity} players={byId} />
-      </section>
-    </div>
-
-    <section id="maps" class="wrap section">
-      <MapPool players={active} groupMaps={squad.groupMaps} windowDays={squad.windowDays} />
+    <section id="maps" class="section">
+      <MapPool players={shown} lineups={squad.lineups} mapImages={squad.mapImages} windowDays={squad.windowDays} />
     </section>
 
-    <section id="games" class="wrap section">
+    <section id="games" class="section">
       <div class="section-head">
-        <h2>Games together</h2>
-        {#if squad.together.matches}
+        <h2>Games</h2>
+        {#if together.matches}
           <span class="meta">
-            <span>Last {squad.windowDays} days</span>
-            <span class="record">
-              <b>{squad.together.wins}–{squad.together.matches - squad.together.wins}</b>
-              {Math.round((squad.together.wins / squad.together.matches) * 100)}%
-            </span>
+            Together, last {squad.windowDays} days: <b>{together.matches}</b> matches ·
+            <b>{together.wins}–{together.matches - together.wins}</b> ·
+            <b>{Math.round((together.wins / together.matches) * 100)}%</b> won
           </span>
         {/if}
       </div>
-      <GroupGames games={squad.games} players={byId} now={squad.generatedAt} />
+      <GroupGames games={squad.games} players={byId} mapImages={squad.mapImages} now={squad.generatedAt} />
     </section>
 
-    <section id="duos" class="wrap section">
+    <section id="duos" class="section">
       <Duos pairs={squad.pairs} players={byId} windowDays={squad.windowDays} />
     </section>
   {:else}
-    <section class="wrap section">
+    <section class="section">
       <div class="section-head"><h2>Players</h2></div>
       <p class="none">FACEIT isn't responding right now.</p>
-      <button class="link-button" type="button" onclick={refresh}>Try again</button>
+      <button class="text-button more" type="button" onclick={refresh}>Try again</button>
     </section>
   {/if}
 </main>
 
-<footer class="wrap footer">
-  <div class="footer-row">
-    <span>Data from the FACEIT Data API{#if squad} · {squad.players.length} players{/if}</span>
+<footer class="wrap">
+  <div class="footer">
+    <span>FACEIT Data API{#if squad} · {players.length} players{/if}</span>
     <OwnerAccess
       isOwner={data.isOwner}
       configured={data.ownerAccessConfigured}
@@ -181,115 +186,125 @@
 </footer>
 
 <style>
-  .top {
-    align-items: baseline;
-    border-bottom: 3px solid var(--ink);
+  .masthead {
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .bar {
+    align-items: center;
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 32px;
-    padding: 22px 0 10px;
+    gap: 6px 28px;
+    min-height: 48px;
   }
 
   .wordmark {
-    color: var(--ink);
-    font: 600 30px/1 var(--serif);
-    letter-spacing: -0.015em;
-  }
-
-  .wordmark:hover {
+    font: 650 16px/1 var(--wordmark);
+    font-stretch: 116%;
+    letter-spacing: -0.01em;
     text-decoration: none;
   }
 
   nav {
     display: flex;
-    font-size: 13px;
-    gap: 22px;
+    gap: 20px;
   }
 
   nav a {
-    color: var(--ink-2);
+    color: var(--muted);
+    text-decoration: none;
   }
 
   nav a:hover {
     color: var(--ink);
-    text-decoration: none;
   }
 
   .tools {
-    align-items: baseline;
-    color: var(--ink-2);
+    align-items: center;
     display: flex;
-    font-size: 13px;
-    gap: 18px;
+    flex-wrap: wrap;
+    gap: 4px 18px;
     margin-left: auto;
   }
 
-  .updated {
+  .stamp {
     color: var(--muted);
-    font-variant-numeric: tabular-nums;
+    font: 11.5px var(--mono);
   }
 
-  .section {
-    margin-top: 60px;
+  /* The theme is set on <html> before first paint, so the switch follows it rather than waiting for hydration. */
+  .theme button[aria-pressed] {
+    border-bottom-color: transparent;
+    color: var(--muted);
+  }
+
+  :global(:root:not([data-theme='light'])) .theme .dark,
+  :global(:root[data-theme='light']) .theme .light {
+    border-bottom-color: var(--accent);
+    color: var(--ink);
+  }
+
+  .theme button:hover {
+    color: var(--ink);
+  }
+
+  .tools .text-button {
+    margin-left: -8px;
   }
 
   .pair {
-    column-gap: 40px;
     display: grid;
-    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-  }
-
-  .record b {
-    color: var(--ink);
-    font-weight: 600;
+    gap: 48px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    margin-top: 48px;
   }
 
   .footer {
-    color: var(--muted);
-    font-size: 12px;
-    margin-top: 80px;
-    padding-bottom: 64px;
-  }
-
-  .footer-row {
     align-items: baseline;
-    border-top: 1px solid var(--ink);
+    border-top: 1px solid var(--rule);
+    color: var(--muted);
     display: flex;
     flex-wrap: wrap;
+    font-size: 11.5px;
     gap: 8px 24px;
     justify-content: space-between;
-    padding-top: 10px;
+    margin-top: 72px;
+    padding-bottom: 64px;
+    padding-top: 14px;
   }
 
-  @media (max-width: 1000px) {
+  @media (max-width: 1060px) {
     .pair {
       grid-template-columns: minmax(0, 1fr);
-      row-gap: 60px;
+      gap: 40px;
     }
   }
 
-  @media (max-width: 760px) {
-    .top {
-      padding-top: 16px;
-    }
-
-    .wordmark {
-      font-size: 26px;
-    }
-
+  @media (max-width: 860px) {
     nav {
-      order: 3;
-      overflow-x: auto;
-      scrollbar-width: none;
+      display: none;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .bar {
+      gap: 4px 16px;
+      padding-bottom: 6px;
+      padding-top: 6px;
+    }
+
+    .tools {
+      gap: 2px 12px;
+      margin-left: 0;
       width: 100%;
     }
 
-    .updated {
+    .stamp {
       display: none;
     }
 
-    .section {
-      margin-top: 44px;
+    .tools .text-button {
+      margin-left: 0;
     }
   }
 </style>

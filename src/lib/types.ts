@@ -158,6 +158,23 @@ export interface GroupGame {
   lines: GameLine[];
 }
 
+/** A group game reduced to who played and how it went, enough to recount any subset of the group. */
+export interface GroupLineup {
+  map: string;
+  won: boolean;
+  lines: Array<{ playerId: string; kills: number; deaths: number }>;
+}
+
+/** The group's record on one map: games with two or more chosen players on the same team. */
+export interface TogetherMap {
+  map: string;
+  matches: number;
+  wins: number;
+  /** Kills and deaths of the chosen players only. */
+  kills: number;
+  deaths: number;
+}
+
 export interface PairRecord {
   a: string;
   b: string;
@@ -175,9 +192,10 @@ export interface SquadOverview {
   mapImages: Record<string, string>;
   /** Latest matches where two or more of the group were on the same team. */
   games: GroupGame[];
+  /** Every group game in the window (games is capped), newest first. */
+  lineups: GroupLineup[];
   together: { matches: number; wins: number };
   pairs: PairRecord[];
-  groupMaps: Array<{ map: string; matches: number; wins: number }>;
   /** Matches per player per week, oldest week first. */
   activity: { weekStarts: number[]; rows: Array<{ playerId: string; counts: number[] }> };
 }

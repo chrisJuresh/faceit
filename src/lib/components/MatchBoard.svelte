@@ -1,460 +1,257 @@
 <script lang="ts">
-  import { dateTime, duration, timeAgo } from '$lib/format';
-  import type { LiveMatch, LivePlayer, LiveTeam } from '$lib/types';
-  import Level from './Level.svelte';
+  import { duration, score, thousands } from '$lib/format';
+  import { sides, teamName } from '$lib/match-board';
+  import type { LiveMatch } from '$lib/types';
+  import { onMount } from 'svelte';
+  import Roster from './Roster.svelte';
+  import Scoreboard from './Scoreboard.svelte';
 
-  /** `compact` shows only our side's scoreline until "Full scoreboard" is opened. */
-  let { match, now, compact = false }: { match: LiveMatch; now: number; compact?: boolean } = $props();
+  /** Everything FACEIT publishes about one match. The map art shrinks to a thumbnail once it's over. */
+  let { match }: { match: LiveMatch } = $props();
 
-  let full = $state(false);
-  let rawFor = $state<string | null>(null);
+  // Wall-clock times differ between server and browser, so they appear once the page is live.
+  let mounted = $state(false);
+  onMount(() => (mounted = true));
 
   const finished = $derived(match.phase === 'finished');
-  const teams = $derived([...match.teams].sort((a, b) => Number(b.tracked) - Number(a.tracked)));
-  const ours = $derived(teams.find((team) => team.tracked) ?? teams[0]);
-  const theirs = $derived(teams.find((team) => team !== ours));
-  const shownTeams = $derived(compact && !full ? teams.filter((team) => team === ours) : teams);
-  const hasScore = $derived(finished && ours?.score !== null && theirs?.score !== null);
-
-  const label = (team: LiveTeam | undefined) => (team ? team.name.replace(/^team_/, '') : '');
-  const teamNote = (team: LiveTeam) => {
-    if (finished) return team.score === null ? '' : String(team.score);
-    return [
-      team.averageElo ? `Avg ELO ${team.averageElo.toLocaleString('en-GB')}` : '',
-      team.winProbability === null ? '' : `${team.winProbability}%`
-    ]
-      .filter(Boolean)
-      .join(' · ');
-  };
-  const diff = (player: LivePlayer) =>
-    player.scoreline ? player.scoreline.kills - player.scoreline.deaths : 0;
-  const signed = (value: number) => (value > 0 ? `+${value}` : value < 0 ? `−${-value}` : '0');
-  const fraction = (wins: number, total: number) => (total ? `${wins}/${total}` : '–');
-  const pct = (value: number | null | undefined) =>
-    value === null || value === undefined || !Number.isFinite(value) ? '—' : value.toFixed(0);
-
-  const halves = $derived.by(() => {
-    if (!finished || !ours || !theirs || ours.firstHalf === null || theirs.firstHalf === null) return null;
-    const parts = [
-      `1st half ${ours.firstHalf}–${theirs.firstHalf}`,
-      `2nd half ${ours.secondHalf ?? 0}–${theirs.secondHalf ?? 0}`
-    ];
-    if ((ours.overtime ?? 0) + (theirs.overtime ?? 0) > 0) parts.push(`Overtime ${ours.overtime}–${theirs.overtime}`);
-    if (match.rounds) parts.push(`${match.rounds} rounds`);
-    return parts.join(' · ');
-  });
-
-  const place = $derived(
-    [
-      match.competition,
-      match.location?.name,
-      match.region,
-      match.calculateElo ? null : 'ELO not counted'
-    ]
-      .filter(Boolean)
-      .join(' · ')
+  const { ours, theirs } = $derived(sides(match));
+  const mapName = $derived(match.map?.name ?? (finished ? '—' : 'Map vote'));
+  const image = $derived(match.map?.image ?? '');
+  const odds = $derived(
+    ours && theirs && ours.winProbability !== null && theirs.winProbability !== null
+      ? { ours: ours.winProbability, theirs: theirs.winProbability }
+      : null
   );
+  const server = $derived([match.location?.name, match.region].filter(Boolean).join(' · ') || '—');
 
-  const when = $derived.by(() => {
-    if (match.phase === 'live' && match.startedAt) return `Started ${timeAgo(match.startedAt, now)}`;
-    if (match.phase === 'setup') return match.configuredAt ? `Room opened ${timeAgo(match.configuredAt, now)}` : 'Starting';
-    if (finished && match.finishedAt) {
-      const length = match.startedAt ? ` · ${duration(match.finishedAt - match.startedAt)} long` : '';
-      return `Finished ${timeAgo(match.finishedAt, now)}${length}`;
+  const clockTime = (timestamp: number) =>
+    new Date(timestamp * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+  const liveFacts = $derived<Array<[string, string, boolean]>>([
+    ['Queue', match.competition || '—', false],
+    ['Server', server, false],
+    ['Format', `BO${match.bestOf || 1} · ${match.calculateElo ? 'ELO' : 'no ELO'}`, false],
+    ['Started', match.startedAt && mounted ? clockTime(match.startedAt) : '—', true]
+  ]);
+
+  /** Label, value, and whether the value is a number (set in the mono face). */
+  const finishedFacts = $derived.by(() => {
+    const facts: Array<[string, string, boolean]> = [
+      ['Map', mapName, false],
+      ['Queue', match.competition || '—', false]
+    ];
+    if (ours && theirs) {
+      facts.push(['1st half', score(ours.firstHalf, theirs.firstHalf), true]);
+      facts.push(['2nd half', score(ours.secondHalf, theirs.secondHalf), true]);
+      if ((ours.overtime ?? 0) + (theirs.overtime ?? 0) > 0)
+        facts.push(['Overtime', score(ours.overtime, theirs.overtime), true]);
     }
-    return match.status;
+    if (match.rounds) facts.push(['Rounds', String(match.rounds), true]);
+    if (match.startedAt && match.finishedAt) facts.push(['Length', duration(match.finishedAt - match.startedAt), true]);
+    facts.push(['Server', server, false]);
+    return facts;
   });
 </script>
 
-<article class="match" class:finished>
-  <header class="head">
-    {#if match.map?.image}
-      <img class="art" src={match.map.image} alt="" loading="lazy" />
-    {/if}
-    <div class="title">
-      <h3>
-        {match.map?.name ?? 'Map vote'}
-        {#if hasScore}
-          <span class="score">{ours.score}–{theirs?.score}</span>
-          <span class="res" class:win={ours.won} class:loss={!ours.won}>{ours.won ? 'Won' : 'Lost'}</span>
-        {/if}
-      </h3>
-      {#if halves}<p class="meta-line">{halves}</p>{/if}
-      <p class="meta-line">{place}</p>
-      <p class="meta-line" title={match.finishedAt ? dateTime(match.finishedAt) : undefined}>{when}</p>
-    </div>
-    <p class="links">
-      <a href={match.faceitUrl} target="_blank" rel="noreferrer">Match room ↗</a>
-      {#if match.demoUrl}<a href={match.demoUrl} target="_blank" rel="noreferrer">Demo ↗</a>{/if}
-    </p>
-  </header>
-
-  {#if !finished && ours && theirs}
-    <div class="teams">
-      <div>
-        <p class="team-name">{label(ours)}</p>
-        {#if ours.averageElo}<p class="team-sub">Avg ELO {ours.averageElo.toLocaleString('en-GB')}</p>{/if}
-      </div>
-      {#if ours.winProbability !== null && theirs.winProbability !== null}
-        <div class="odds">
-          <p class="odds-line"><b>{ours.winProbability}%</b><span>Win probability</span><b>{theirs.winProbability}%</b></p>
-          <div class="odds-bar" aria-hidden="true">
-            <i style:flex-grow={ours.winProbability}></i><i style:flex-grow={theirs.winProbability}></i>
-          </div>
-        </div>
+{#if finished}
+  <div class="finished-top">
+    {#if image}<img class="map-thumb" src={image} alt="" />{/if}
+    <p class="score">
+      {#if ours && ours.score !== null}
+        <span class="res" class:win={ours.won} class:loss={!ours.won}>{ours.won ? 'W' : 'L'}</span>{score(ours.score, theirs?.score)}
       {:else}
-        <div></div>
+        —
       {/if}
-      <div class="right">
-        <p class="team-name">{label(theirs)}</p>
-        {#if theirs.averageElo}<p class="team-sub">Avg ELO {theirs.averageElo.toLocaleString('en-GB')}</p>{/if}
-      </div>
-    </div>
-  {/if}
-
-  <div class="scroll">
-    <table class="tbl box">
-      <thead>
-        {#if finished}
-          <tr>
-            <th class="l stick" scope="col">Player</th>
-            <th scope="col">K</th><th scope="col">D</th><th scope="col">A</th>
-            <th scope="col" title="Kills minus deaths">+/−</th>
-            <th scope="col">K/D</th><th scope="col">K/R</th><th scope="col">ADR</th>
-            <th scope="col" title="Kills that were headshots">HS %</th>
-            <th scope="col">MVPs</th>
-            <th scope="col" title="First kills of a round">First</th>
-            <th scope="col" title="Opening duels won / taken">Entry</th>
-            <th scope="col" title="1v1 and 1v2 clutches won / played">Clutch</th>
-            <th scope="col">3K</th><th scope="col">4K</th><th scope="col">5K</th>
-            <th scope="col" title="Utility damage">Util</th>
-            <th scope="col" title="Enemies flashed">Flashed</th>
-            <th scope="col" title="Sniper kills">AWP</th>
-          </tr>
-        {:else}
-          <tr class="groups">
-            <th class="stick"></th>
-            <th></th>
-            <th colspan="9" class="first"><span>Lifetime</span></th>
-            <th colspan="6" class="first"><span>On {match.map?.name ?? 'this map'}</span></th>
-          </tr>
-          <tr>
-            <th class="l stick" scope="col">Player</th>
-            <th scope="col">ELO</th>
-            <th scope="col" class="first">M</th><th scope="col">Win %</th><th scope="col">K/D</th>
-            <th scope="col">ADR</th><th scope="col">HS %</th>
-            <th scope="col" title="Opening duels won">Entry %</th>
-            <th scope="col" title="1v1 clutches won">1v1 %</th>
-            <th scope="col" title="Current win streak">Streak</th>
-            <th scope="col" class="l">Last 5</th>
-            <th scope="col" class="first">M</th><th scope="col">Win %</th><th scope="col">K/D</th>
-            <th scope="col">K/R</th><th scope="col">ADR</th><th scope="col">HS %</th>
-          </tr>
-        {/if}
-      </thead>
-      {#each shownTeams as team (team.factionId)}
-        <tbody>
-          <tr class="team">
-            <th colspan={finished ? 19 : 17} scope="colgroup">
-              {label(team)}
-              <span class="team-sub">{teamNote(team)}</span>
-            </th>
-          </tr>
-          {#each team.players as player (player.playerId)}
-            {@const line = player.scoreline}
-            {@const life = player.lifetime}
-            {@const map = player.onMap}
-            {@const mine = player.isOwner || player.isFriend}
-            <tr class="person" class:mine>
-              <th class="l stick" scope="row">
-                <span class="who">
-                  <Level level={player.skillLevel} elo={player.elo} />
-                  {#if finished && player.allStats.length}
-                    <button
-                      type="button"
-                      class="name"
-                      aria-expanded={rawFor === player.playerId}
-                      title="Every stat FACEIT recorded"
-                      onclick={() => (rawFor = rawFor === player.playerId ? null : player.playerId)}
-                    >{player.displayName}</button>
-                  {:else}
-                    <a class="name" href={player.faceitUrl} target="_blank" rel="noreferrer">{player.displayName}</a>
-                  {/if}
-                  {#if player.country}<span class="cc">{player.country}</span>{/if}
-                  {#if player.isLeader}<span class="cc" title="Captain">C</span>{/if}
-                </span>
-              </th>
-              {#if finished}
-                {#if line}
-                  <td>{line.kills}</td>
-                  <td>{line.deaths}</td>
-                  <td>{line.assists}</td>
-                  <td class:pos={diff(player) > 0} class:neg={diff(player) < 0}>{signed(diff(player))}</td>
-                  <td>{line.kd.toFixed(2)}</td>
-                  <td>{line.kr.toFixed(2)}</td>
-                  <td>{line.adr.toFixed(1)}</td>
-                  <td>{line.headshots}</td>
-                  <td>{line.mvps}</td>
-                  <td>{line.firstKills}</td>
-                  <td>{fraction(line.entryWins, line.entryCount)}</td>
-                  <td>{fraction(line.clutchWins, line.clutchAttempts)}</td>
-                  <td>{line.tripleKills}</td>
-                  <td>{line.quadroKills}</td>
-                  <td>{line.pentaKills}</td>
-                  <td>{line.utilityDamage}</td>
-                  <td>{line.enemiesFlashed}</td>
-                  <td>{line.sniperKills}</td>
-                {:else}
-                  <td colspan="18" class="l muted">FACEIT has no stats for this player</td>
-                {/if}
-              {:else}
-                <td>{player.elo ? player.elo.toLocaleString('en-GB') : '—'}</td>
-                {#if life}
-                  <td class="first">{life.matches.toLocaleString('en-GB')}</td>
-                  <td>{pct(life.winRate)}</td>
-                  <td class:pos={life.kd >= 1} class:neg={life.kd < 1}>{life.kd.toFixed(2)}</td>
-                  <td>{life.adr.toFixed(1)}</td>
-                  <td>{pct(life.headshots)}</td>
-                  <td>{pct(life.entrySuccess)}</td>
-                  <td>{pct(life.clutch1v1)}</td>
-                  <td>{life.currentStreak}</td>
-                  <td class="l">
-                    <span class="results" aria-label="Last results, newest first: {life.recentResults.join(' ')}">
-                      {#each life.recentResults as result, index (index)}<i class:win={result === 'W'}></i>{/each}
-                    </span>
-                  </td>
-                {:else}
-                  <td colspan="9" class="l muted first">No lifetime record</td>
-                {/if}
-                {#if map}
-                  <td class="first" class:low={map.matches < 10}>{map.matches}</td>
-                  <td class:low={map.matches < 10}>{pct(map.winRate)}</td>
-                  <td class:low={map.matches < 10}>{map.kd.toFixed(2)}</td>
-                  <td class:low={map.matches < 10}>{map.kr.toFixed(2)}</td>
-                  <td class:low={map.matches < 10}>{map.adr.toFixed(1)}</td>
-                  <td class:low={map.matches < 10}>{pct(map.headshots)}</td>
-                {:else}
-                  <td colspan="6" class="l muted first">Not played</td>
-                {/if}
-              {/if}
-            </tr>
-            {#if rawFor === player.playerId}
-              <tr class="raw-row">
-                <td colspan="19">
-                  <dl class="raw">
-                    {#each player.allStats as stat (stat.label)}
-                      <div><dt>{stat.label}</dt><dd>{stat.value}</dd></div>
-                    {/each}
-                  </dl>
-                </td>
-              </tr>
-            {/if}
-          {/each}
-        </tbody>
-      {/each}
-    </table>
+    </p>
+    <dl class="kv facts two">
+      {#each finishedFacts as [label, value, numeric] (label)}<dt>{label}</dt><dd class:mono={numeric}>{value}</dd>{/each}
+    </dl>
   </div>
-
-  {#if compact && finished}
-    <button class="link-button" type="button" onclick={() => (full = !full)}>
-      {full ? 'Our side only' : 'Full scoreboard'}
-    </button>
-  {/if}
-</article>
+  <Scoreboard {match} />
+{:else}
+  <div class="live-top">
+    {#if image}<img class="map-art" src={image} alt="" />{:else}<span class="map-art"></span>{/if}
+    <div>
+      <p class="map-name">{mapName}</p>
+      <dl class="kv facts">
+        {#each liveFacts as [label, value, numeric] (label)}<dt>{label}</dt><dd class:mono={numeric}>{value}</dd>{/each}
+      </dl>
+    </div>
+    {#if ours && theirs}
+      <div class="h2h">
+        <p class="row teams"><span>{teamName(ours)}</span><span>{teamName(theirs)}</span></p>
+        <p class="row odds">
+          <span class="chance">{odds ? `${odds.ours}%` : '—'}</span>
+          <span class="label">Win probability</span>
+          <span class="chance">{odds ? `${odds.theirs}%` : '—'}</span>
+        </p>
+        {#if odds}
+          <div class="bar" aria-hidden="true">
+            <i class="us" style:width="{odds.ours}%"></i><i style:width="{odds.theirs}%"></i>
+          </div>
+        {/if}
+        <p class="row sub">
+          <span>avg ELO {thousands(ours.averageElo)}</span><span>avg ELO {thousands(theirs.averageElo)}</span>
+        </p>
+      </div>
+    {/if}
+  </div>
+  <Roster {match} />
+{/if}
 
 <style>
-  .head {
-    align-items: center;
+  .live-top {
+    align-items: end;
     display: grid;
-    gap: 22px;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 32px;
+    grid-template-columns: 192px minmax(0, 1fr) minmax(0, 1.35fr);
     margin-bottom: 22px;
   }
 
-  .art {
-    background: var(--band);
+  .map-art {
+    aspect-ratio: 16 / 9;
+    background: var(--cell);
+    border-radius: 2px;
     display: block;
-    height: 99px;
     object-fit: cover;
-    width: 176px;
+    width: 100%;
   }
 
-  h3 {
-    font: 500 38px/1 var(--serif);
-    letter-spacing: -0.01em;
-    margin-bottom: 8px;
-  }
-
-  .finished h3 {
-    font-size: 32px;
-  }
-
-  .score {
+  .map-name {
     font: 600 30px/1 var(--sans);
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -0.01em;
-    margin-left: 14px;
+    letter-spacing: -0.02em;
+    margin-bottom: 14px;
   }
 
-  h3 .res {
-    font: 600 14px var(--sans);
-    margin-left: 12px;
-    vertical-align: middle;
+  .facts dd {
+    font-family: var(--sans);
+    text-align: left;
   }
 
-  .meta-line {
-    color: var(--ink-2);
-    font-size: 13px;
+  .facts dd.mono {
+    font-family: var(--mono);
   }
 
-  .meta-line + .meta-line {
-    margin-top: 2px;
-  }
-
-  .links {
-    align-self: start;
+  .h2h .row {
+    align-items: baseline;
     display: flex;
-    font-size: 13px;
-    gap: 18px;
-  }
-
-  .teams {
-    align-items: end;
-    display: grid;
-    gap: 24px;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) minmax(0, 1fr);
-    margin-bottom: 8px;
-  }
-
-  .right {
-    text-align: right;
-  }
-
-  .team-name {
-    font: 500 19px/1.2 var(--serif);
-  }
-
-  .team-sub {
-    color: var(--ink-2);
-    font: 400 12.5px var(--sans);
-  }
-
-  .odds-line {
-    display: flex;
-    font-size: 12.5px;
-    font-variant-numeric: tabular-nums;
+    gap: 12px;
     justify-content: space-between;
-    margin-bottom: 5px;
   }
 
-  .odds-line span {
-    color: var(--ink-2);
+  .teams span {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .odds-line b {
-    font-size: 15px;
-    font-weight: 600;
+  .odds {
+    margin-top: 6px;
   }
 
-  .odds-bar {
+  .chance {
+    font: 500 24px/1.1 var(--mono);
+    letter-spacing: -0.02em;
+  }
+
+  .label {
+    color: var(--muted);
+    font-size: 11.5px;
+  }
+
+  .bar {
     display: flex;
     gap: 2px;
     height: 6px;
+    margin: 8px 0 6px;
   }
 
-  .odds-bar i:first-child {
-    background: var(--ink);
+  .bar i {
+    background: var(--faint);
+    border-radius: 1px;
+    display: block;
   }
 
-  .odds-bar i:last-child {
-    background: var(--rule-2);
+  .bar i.us {
+    background: var(--accent);
   }
 
-  .box .team th {
-    border-bottom: 1px solid var(--ink);
-    color: var(--ink);
-    font: 500 16px/1.2 var(--serif);
-    padding: 18px 0 6px;
-    text-align: left;
+  .sub {
+    color: var(--muted);
+    font: 11.5px var(--mono);
   }
 
-  .box .team .team-sub {
-    margin-left: 12px;
-  }
-
-  .box tbody:first-of-type .team th {
-    padding-top: 10px;
-  }
-
-  .box .first {
-    padding-left: 18px;
-  }
-
-  .who {
+  .finished-top {
     align-items: center;
-    display: inline-flex;
-    gap: 8px;
+    display: grid;
+    gap: 28px;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    margin-bottom: 20px;
   }
 
-  .name {
-    background: none;
-    border: 0;
-    color: var(--ink);
-    cursor: pointer;
-    font: inherit;
-    font-weight: 500;
-    padding: 0;
+  .map-thumb {
+    background: var(--cell);
+    border-radius: 2px;
+    height: 32px;
+    object-fit: cover;
+    width: 56px;
   }
 
-  button.name:hover {
-    text-decoration: underline;
-    text-underline-offset: 2px;
+  .score {
+    font: 600 40px/1 var(--mono);
+    letter-spacing: -0.04em;
+    white-space: nowrap;
   }
 
-  .mine .name {
-    font-weight: 700;
+  .score .res {
+    font-size: 15px;
+    letter-spacing: 0;
+    margin-right: 10px;
+    vertical-align: 12px;
   }
 
-  .cc {
-    color: var(--muted);
-    font-size: 11px;
+  .facts.two {
+    gap: 3px 18px;
+    grid-template-columns: repeat(2, auto minmax(0, max-content));
+    justify-content: start;
   }
 
-  .muted {
-    color: var(--muted);
+  .facts.two dd {
+    padding-right: 14px;
   }
 
-  .raw-row > td {
-    padding: 8px 0 16px;
-    text-align: left;
-    white-space: normal;
-  }
-
-  @media (max-width: 760px) {
-    .head {
-      grid-template-columns: minmax(0, 1fr) auto;
+  @media (max-width: 860px) {
+    .live-top {
+      gap: 20px;
+      grid-template-columns: 128px minmax(0, 1fr);
     }
 
-    .art {
-      display: none;
+    .h2h {
+      grid-column: 1 / -1;
     }
 
-    h3 {
-      font-size: 30px;
+    .finished-top {
+      gap: 8px 20px;
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .finished-top .facts {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .map-name {
+      font-size: 24px;
     }
 
     .score {
-      font-size: 24px;
-      margin-left: 10px;
+      font-size: 32px;
     }
 
-    .teams {
-      grid-template-columns: 1fr 1fr;
-    }
-
-    .odds {
-      grid-column: 1 / -1;
-      order: 3;
+    .facts.two {
+      grid-template-columns: auto minmax(0, 1fr);
     }
   }
 </style>

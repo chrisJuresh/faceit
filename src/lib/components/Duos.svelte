@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { fixed } from '$lib/format';
   import type { PairRecord, SquadPlayer } from '$lib/types';
+  import WinTrack from './WinTrack.svelte';
 
   let {
     pairs,
@@ -7,7 +9,7 @@
     windowDays
   }: { pairs: PairRecord[]; players: Map<string, SquadPlayer>; windowDays: number } = $props();
 
-  /** Pairs with fewer games than this are faded. */
+  /** Pairs with fewer games than this are muted. */
   const FEW = 5;
 
   let order = $state<'games' | 'rate'>('games');
@@ -19,56 +21,53 @@
       .sort((x, y) =>
         order === 'games'
           ? y.matches - x.matches || y.winRate - x.winRate
-          : Number(y.matches >= FEW) - Number(x.matches >= FEW) || y.winRate - x.winRate || y.matches - x.matches
+          : y.winRate - x.winRate || y.matches - x.matches
       )
   );
   const half = $derived(Math.ceil(shown.length / 2));
-  const columns = $derived(shown.length > 8 ? [shown.slice(0, half), shown.slice(half)] : [shown]);
+  const columns = $derived(shown.length > 1 ? [shown.slice(0, half), shown.slice(half)] : [shown]);
   const name = (id: string) => players.get(id)?.displayName ?? 'Unknown';
 </script>
 
 <div class="section-head">
   <h2>Duos</h2>
   <span class="meta">Same team, last {windowDays} days</span>
-</div>
-
-<div class="controls">
-  <div class="seg" role="group" aria-label="Order">
-    <button type="button" aria-pressed={order === 'games'} onclick={() => (order = 'games')}>Most played</button>
-    <button type="button" aria-pressed={order === 'rate'} onclick={() => (order = 'rate')}>Win %</button>
-  </div>
-  <div class="seg push" role="group" aria-label="Pairs shown">
-    <button type="button" aria-pressed={!everyone} onclick={() => (everyone = false)}>3+ games</button>
-    <button type="button" aria-pressed={everyone} onclick={() => (everyone = true)}>All<span class="count">{pairs.length}</span></button>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Order">
+      <button type="button" aria-pressed={order === 'games'} onclick={() => (order = 'games')}>Most played</button>
+      <button type="button" aria-pressed={order === 'rate'} onclick={() => (order = 'rate')}>Win %</button>
+    </div>
+    <span class="divider" aria-hidden="true"></span>
+    <div class="seg" role="group" aria-label="Pairs shown">
+      <button type="button" aria-pressed={!everyone} onclick={() => (everyone = false)}>3+ matches</button>
+      <button type="button" aria-pressed={everyone} onclick={() => (everyone = true)}>
+        All<span class="count">{pairs.length}</span>
+      </button>
+    </div>
   </div>
 </div>
 
 {#if shown.length}
-  <div class="columns" class:two={columns.length === 2}>
+  <div class="columns">
     {#each columns as list, index (index)}
-      <table class="tbl duos">
+      <table class="mini">
         <thead>
           <tr>
             <th class="l" scope="col">Pair</th>
-            <th scope="col">Games</th>
+            <th scope="col">M</th>
             <th scope="col">W–L</th>
             <th scope="col">Win %</th>
-            <th class="track-col" scope="col"><span class="sr-only">Win rate from 0 to 100%, 50% marked</span></th>
+            <th scope="col"><span class="sr-only">Win rate from 0 to 100, 50 marked</span></th>
           </tr>
         </thead>
         <tbody>
           {#each list as pair (pair.a + pair.b)}
             <tr class:low={pair.matches < FEW}>
-              <th class="l" scope="row">{name(pair.a)} <span class="amp">+</span> {name(pair.b)}</th>
+              <td class="l">{name(pair.a)}<span class="amp">+</span><wbr />{name(pair.b)}</td>
               <td>{pair.matches}</td>
               <td>{pair.wins}–{pair.matches - pair.wins}</td>
-              <td>{pair.winRate.toFixed(0)}</td>
-              <td class="track-col" aria-hidden="true">
-                <span class="track">
-                  <span class="mid"></span>
-                  <span class="dot" class:up={pair.winRate >= 50} style:left="{pair.winRate}%"></span>
-                </span>
-              </td>
+              <td>{fixed(pair.winRate)}</td>
+              <td class="track"><WinTrack rate={pair.winRate} faded={pair.matches < FEW} /></td>
             </tr>
           {/each}
         </tbody>
@@ -76,84 +75,57 @@
     {/each}
   </div>
 {:else}
-  <p class="none">No pair has played three games together in the last {windowDays} days.</p>
+  <p class="none">No pair has played three matches together in the last {windowDays} days</p>
 {/if}
 
 <style>
   .columns {
     display: grid;
-    gap: 0 40px;
-  }
-
-  .columns.two {
+    gap: 0 48px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .duos tbody th {
-    font-weight: 500;
+  .mini td {
+    height: 30px;
   }
 
   .amp {
     color: var(--muted);
-    margin: 0 3px;
-  }
-
-  .track-col {
-    width: 34%;
+    margin: 0 6px;
   }
 
   .track {
-    display: block;
-    height: 12px;
-    margin: 0 6px;
-    position: relative;
+    --track-width: 80px;
+    padding-left: 14px;
+    text-align: left;
+    width: 96px;
   }
 
-  .track::before {
-    background: var(--rule-2);
-    content: '';
-    height: 1px;
-    left: 0;
-    position: absolute;
-    right: 0;
-    top: 50%;
-  }
-
-  .mid {
-    background: var(--ink-2);
-    height: 12px;
-    left: 50%;
-    position: absolute;
-    top: 0;
-    width: 1px;
-  }
-
-  .dot {
-    background: var(--loss);
-    border: 2px solid var(--page);
-    border-radius: 50%;
-    height: 12px;
-    position: absolute;
-    top: 0;
-    transform: translateX(-50%);
-    width: 12px;
-  }
-
-  .dot.up {
-    background: var(--win);
-  }
-
-  .low .dot {
-    opacity: 0.45;
-  }
-
-  @media (max-width: 900px) {
-    .columns.two {
+  @media (max-width: 860px) {
+    .columns {
       grid-template-columns: minmax(0, 1fr);
     }
 
-    .columns.two .duos + .duos thead {
+    .columns .mini + .mini thead {
       display: none;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .mini td.l {
+      white-space: normal;
+    }
+
+    .mini td {
+      height: auto;
+      padding-bottom: 5px;
+      padding-top: 5px;
+    }
+
+    .track {
+      --track-width: 48px;
+      padding-left: 8px;
+      width: 58px;
     }
   }
 </style>

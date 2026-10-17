@@ -2,106 +2,125 @@
   import { shortDate } from '$lib/format';
   import type { SquadOverview, SquadPlayer } from '$lib/types';
 
-  let {
-    activity,
-    players
-  }: { activity: SquadOverview['activity']; players: Map<string, SquadPlayer> } = $props();
+  /** Matches per player per week; deeper accent for busier weeks. */
+  let { activity, players }: { activity: SquadOverview['activity']; players: SquadPlayer[] } = $props();
 
+  const counts = $derived(new Map(activity.rows.map((row) => [row.playerId, row.counts])));
   const rows = $derived(
-    activity.rows
-      .map((row) => ({
-        ...row,
-        name: players.get(row.playerId)?.displayName ?? 'Unknown',
-        total: row.counts.reduce((sum, count) => sum + count, 0)
-      }))
-      .filter((row) => row.total > 0)
-      .sort((a, b) => b.total - a.total)
+    [...players]
+      .sort((a, b) => b.elo - a.elo)
+      .map((player) => {
+        const weeks = counts.get(player.playerId) ?? activity.weekStarts.map(() => 0);
+        return { player, weeks, total: weeks.reduce((sum, count) => sum + count, 0) };
+      })
   );
-  const peak = $derived(Math.max(1, ...rows.flatMap((row) => row.counts)));
-  const strength = (count: number) => (count ? 0.1 + 0.75 * Math.sqrt(count / peak) : 0);
-
-  // Label the first week of each month.
-  const monthLabels = $derived(
-    activity.weekStarts.map((start, index) => {
-      const month = new Date(start * 1000).getUTCMonth();
-      const previous = index ? new Date(activity.weekStarts[index - 1] * 1000).getUTCMonth() : -1;
-      return month !== previous
-        ? new Intl.DateTimeFormat('en-GB', { month: 'short', timeZone: 'UTC' }).format(new Date(start * 1000))
-        : '';
-    })
-  );
+  const peak = $derived(Math.max(1, ...rows.flatMap((row) => row.weeks)));
+  // Capped so the count inside stays readable in both themes.
+  const tint = (count: number) =>
+    `color-mix(in srgb, var(--accent) ${Math.round(12 + Math.sqrt(count / peak) * 36)}%, var(--cell))`;
 </script>
 
 {#if rows.length}
-  <div class="grid" style:--weeks={activity.weekStarts.length}>
-    <span></span>
-    {#each monthLabels as label, index (index)}<span class="month">{label}</span>{/each}
-    <span class="month total">Total</span>
-
-    {#each rows as row (row.playerId)}
-      <span class="name">{row.name}</span>
-      {#each row.counts as count, index (index)}
-        {@const level = strength(count)}
-        <span
-          class="cell"
-          class:strong={level > 0.5}
-          style:background={count ? `rgb(var(--ink-rgb) / ${level.toFixed(3)})` : undefined}
-          title="{row.name}: {count} {count === 1 ? 'match' : 'matches'}, week of {shortDate(activity.weekStarts[index])}"
-        >{count || ''}</span>
-      {/each}
-      <span class="total">{row.total}</span>
-    {/each}
+  <div class="scroll">
+    <table class="activity">
+      <thead>
+        <tr>
+          <th class="stick"><span class="sr-only">Player</span></th>
+          {#each activity.weekStarts as start, index (start)}
+            <th scope="col">
+              {#if index % 3 === 0 && index < activity.weekStarts.length - 2}<span class="week">{shortDate(start)}</span>{/if}
+              <span class="sr-only">Week of {shortDate(start)}</span>
+            </th>
+          {/each}
+          <th class="total" scope="col">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each rows as row (row.player.playerId)}
+          <tr>
+            <th class="stick name" scope="row">{row.player.displayName}</th>
+            {#each row.weeks as count, index (index)}
+              <td
+                style:background={count ? tint(count) : undefined}
+                title="{row.player.displayName}: {count} {count === 1 ? 'match' : 'matches'}, week of {shortDate(activity.weekStarts[index])}"
+              >
+                {count || ''}
+              </td>
+            {/each}
+            <td class="total">{row.total}</td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
   </div>
 {:else}
-  <p class="none">Nobody has played in the last {activity.weekStarts.length} weeks.</p>
+  <p class="none">No players</p>
 {/if}
 
 <style>
-  .grid {
-    align-items: center;
-    display: grid;
-    font-size: 12px;
-    gap: 3px;
-    grid-template-columns: minmax(84px, 116px) repeat(var(--weeks), minmax(0, 1fr)) 38px;
+  .activity {
+    border-collapse: separate;
+    border-spacing: 2px;
+    margin: 0 -2px;
+    white-space: nowrap;
+  }
+
+  th {
+    font-weight: 400;
+    padding: 0;
+  }
+
+  thead th {
+    height: 22px;
+    position: relative;
+  }
+
+  .week {
+    bottom: 5px;
+    color: var(--muted);
+    font: 10px var(--mono);
+    left: 1px;
+    position: absolute;
+  }
+
+  .stick {
+    background: var(--page);
+    left: 0;
+    position: sticky;
+    z-index: 1;
   }
 
   .name {
+    color: var(--ink-2);
+    font-size: 12px;
+    max-width: 120px;
     overflow: hidden;
-    padding-right: 8px;
+    padding-right: 12px;
+    text-align: left;
     text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
-  .month {
-    color: var(--muted);
-    font-size: 11px;
-    height: 16px;
-    overflow: visible;
-    white-space: nowrap;
-  }
-
-  .cell {
-    align-items: center;
-    aspect-ratio: 1;
-    background: var(--band);
-    color: var(--ink);
-    display: flex;
-    font-size: 10.5px;
-    font-variant-numeric: tabular-nums;
-    justify-content: center;
-    min-height: 18px;
-  }
-
-  .cell.strong {
-    color: var(--page);
+  td {
+    background: var(--cell);
+    border-radius: 2px;
+    font: 10.5px var(--mono);
+    height: 22px;
+    min-width: 26px;
+    text-align: center;
+    width: 26px;
   }
 
   .total {
-    font-variant-numeric: tabular-nums;
+    background: none;
+    color: var(--ink-2);
+    font: 12px var(--mono);
+    padding-left: 10px;
     text-align: right;
+    width: auto;
   }
 
-  .month.total {
+  thead .total {
     color: var(--muted);
+    font: 500 11px var(--sans);
   }
 </style>

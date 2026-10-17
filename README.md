@@ -8,8 +8,10 @@ One page, top to bottom:
 
 1. **Live.** Whether anyone in the group is in a FACEIT match right now, with everything FACEIT publishes about it. A match that finished in the last hour stays here with its final score.
 2. **Highlights** (planned). Clips extracted from match demos will sit here: one main highlight per game and one per player per game.
-3. **Players.** Every player's FACEIT numbers in one sortable table, switchable between their last 10, 30 or 100 matches and FACEIT's lifetime record, with a detail view per player.
-4. **Charts and group records.** Games played together, duo records, map pool and activity.
+3. **Players.** Every player's FACEIT numbers in one sortable table, switchable between their last 10, 30 or 100 matches and FACEIT's lifetime record, with a detail view per player. Below it, each player's ELO against FACEIT's level bands and their matches per week.
+4. **Maps, games and duos.** Each player's lifetime record per map, with the group's record together on top (untick a player to leave them out of it), the games played together, and duo records.
+
+The masthead's Active / All switch applies to every per-player view.
 
 Only numbers FACEIT publishes are shown, or plain arithmetic on them (totals, rates, counts). There is no estimated rating, swing or impact score: FACEIT's Data API doesn't publish one.
 
@@ -35,7 +37,7 @@ Notes on FACEIT's fields:
 
 The page polls `/api/live` every 20 seconds while someone is in a match and every 60 seconds otherwise, and pauses while the tab is hidden. For each match it shows everything the public Data API offers:
 
-- **Before and during the match:** status, competition, region, server location, map, elapsed time, both rosters with captain, level, ELO and Steam name, FACEIT's win probability, and each player's lifetime CS2 record (matches, win rate, K/D, ADR, HS%, entry success, 1v1 rate, streaks, recent results) plus their record on the current map.
+- **Before and during the match:** status, competition, region, server location, map, elapsed time, both rosters with profile photo, level and ELO, FACEIT's win probability, and each player's lifetime CS2 record (matches, win rate, K/D, ADR, HS%, entry success, 1v1 rate, streaks, recent results) plus their record on the current map.
 - **After the match:** final and half/overtime scores, round count, the demo link when FACEIT publishes one, and a full stat sheet per player (K/D/A, K/D, K/R, ADR, HS%, MVPs, first kills, entries, clutches, multi-kills, utility damage, enemies flashed, sniper kills), plus every raw stat FACEIT returned.
 
 `/live` redirects to the main page.

@@ -2,9 +2,9 @@ import { env } from '$env/dynamic/private';
 import {
   countSince,
   groupGames,
-  mapRecords,
   pairRecords,
   summarize,
+  toLineup,
   toPlayerMatch,
   weeklyActivity,
   type HistoryMatch
@@ -315,9 +315,9 @@ export async function buildSquad(): Promise<SquadOverview> {
     players: built.map(({ player }) => player).sort((a, b) => b.elo - a.elo),
     mapImages,
     games: games.slice(0, GROUP_GAMES),
+    lineups: games.map(toLineup),
     together: { matches: games.length, wins: games.filter((game) => game.won).length },
     pairs: pairRecords(games),
-    groupMaps: mapRecords(games),
     activity: weeklyActivity(histories, ACTIVITY_WEEKS, now)
   };
 }

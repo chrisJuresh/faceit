@@ -19,23 +19,23 @@
   }
 
   .status {
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    font-family: var(--mono);
     margin: 0;
   }
 
   h1 {
-    color: var(--text-1);
-    font-size: 1.5rem;
+    color: var(--ink);
+    font-size: 20px;
     font-weight: 600;
     margin: 0.25rem 0 0.75rem;
   }
 
   p {
-    color: var(--text-2);
+    color: var(--ink-2);
   }
 
   a {
-    color: var(--text-1);
+    color: var(--ink);
   }
 </style>

@@ -20,7 +20,7 @@
 
 {#if isOwner}
   <form method="POST" action="?/logout" use:enhance>
-    <span class="hint">Open a player to rename them.</span>
+    <span>Open a player to rename them</span>
     <button class="text-button" type="submit">Done editing names</button>
   </form>
 {:else if configured}
@@ -46,21 +46,18 @@
     gap: 12px;
   }
 
-  .hint {
-    color: var(--muted);
-  }
-
   dialog {
     background: var(--page);
-    border: 1px solid var(--ink);
+    border: 1px solid var(--rule-2);
+    border-radius: 2px;
     color: var(--ink);
     max-width: calc(100vw - 32px);
-    padding: 20px 22px;
-    width: 360px;
+    padding: 18px 20px;
+    width: 340px;
   }
 
   dialog::backdrop {
-    background: rgb(0 0 0 / 0.45);
+    background: rgb(0 0 0 / 0.5);
   }
 
   dialog form {
@@ -70,15 +67,13 @@
   }
 
   h2 {
-    border-bottom: 2px solid var(--ink);
-    font: 500 22px/1.2 var(--serif);
-    margin-bottom: 8px;
-    padding-bottom: 8px;
+    font: 600 15px/22px var(--sans);
+    margin-bottom: 6px;
   }
 
   label {
-    color: var(--ink-2);
-    font-size: 13px;
+    color: var(--muted);
+    font-size: 12px;
   }
 
   input {
@@ -86,18 +81,18 @@
     border: 0;
     border-bottom: 1px solid var(--rule-2);
     color: var(--ink);
-    font-size: 14px;
+    font-size: 13px;
     padding: 4px 0;
   }
 
   input:focus {
-    border-bottom-color: var(--ink);
+    border-bottom-color: var(--accent);
     outline: none;
   }
 
   .error {
     color: var(--loss-text);
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .actions {
@@ -111,9 +106,10 @@
   .primary {
     background: var(--ink);
     border: 0;
+    border-radius: 2px;
     color: var(--page);
     cursor: pointer;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     padding: 6px 14px;
   }

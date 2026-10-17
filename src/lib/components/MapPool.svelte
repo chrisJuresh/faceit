@@ -1,288 +1,323 @@
 <script lang="ts">
-  import type { MapStats, SquadPlayer } from '$lib/types';
+  import { fixed } from '$lib/format';
+  import { togetherMaps } from '$lib/stats';
+  import type { GroupLineup, MapStats, SquadPlayer } from '$lib/types';
+  import { SvelteSet } from 'svelte/reactivity';
+  import Avatar from './Avatar.svelte';
 
+  /**
+   * Each player's lifetime record per map, with the group's record on top: games where two or
+   * more of the ticked players were on the same team, over the last `windowDays` days.
+   */
   let {
     players,
-    groupMaps,
+    lineups,
+    mapImages,
     windowDays
   }: {
     players: SquadPlayer[];
-    groupMaps: Array<{ map: string; matches: number; wins: number }>;
+    lineups: GroupLineup[];
+    mapImages: Record<string, string>;
     windowDays: number;
   } = $props();
 
-  type Metric = 'winRate' | 'kd' | 'adr' | 'matches';
-  const METRICS: Array<{ key: Metric; label: string }> = [
-    { key: 'winRate', label: 'Win %' },
-    { key: 'kd', label: 'K/D' },
-    { key: 'adr', label: 'ADR' },
-    { key: 'matches', label: 'Matches' }
-  ];
-  /** Cells with fewer matches than this are faded and left uncoloured. */
+  type Metric = 'winRate' | 'kd';
+  /** Lifetime cells with fewer matches than this stay uncoloured; the Together row uses its own. */
   const FEW = 10;
+  const FEW_TOGETHER = 5;
 
   let metric = $state<Metric>('winRate');
+  const leftOut = new SvelteSet<string>();
 
-  // Maps ordered by how much the group has played them (lifetime), leaving out one-offs.
+  const rows = $derived([...players].filter((player) => player.maps.length).sort((a, b) => b.elo - a.elo));
+  // Everyone who played a group game counts unless unticked, including players hidden by the filter.
+  const chosen = $derived(
+    new Set(lineups.flatMap((game) => game.lines.map((line) => line.playerId)).filter((id) => !leftOut.has(id)))
+  );
+  const together = $derived(togetherMaps(lineups, chosen));
+
+  // Maps the shown players have played at least 10 times between them, most played first.
   const maps = $derived.by(() => {
     const totals = new Map<string, { matches: number; image: string }>();
-    for (const player of players) {
+    for (const player of rows) {
       for (const record of player.maps) {
-        const entry = totals.get(record.map) ?? { matches: 0, image: record.image };
+        const entry = totals.get(record.map) ?? { matches: 0, image: record.image || mapImages[record.map] || '' };
         entry.matches += record.matches;
-        entry.image ||= record.image;
         totals.set(record.map, entry);
       }
     }
     return [...totals.entries()]
-      .filter(([, entry]) => entry.matches >= 10)
+      .filter(([, entry]) => entry.matches >= FEW)
       .sort((a, b) => b[1].matches - a[1].matches)
       .map(([map, entry]) => ({ map, image: entry.image }));
   });
-  const rows = $derived(players.filter((player) => player.maps.length));
-  const together = $derived(new Map(groupMaps.map((record) => [record.map, record])));
-  const peak = $derived(Math.max(1, ...rows.flatMap((player) => player.maps.map((record) => record.matches))));
-
-  function value(record: MapStats) {
-    if (metric === 'winRate') return record.winRate;
-    if (metric === 'kd') return record.kd;
-    if (metric === 'adr') return record.adr;
-    return record.matches;
-  }
-
-  function text(record: MapStats) {
-    if (metric === 'kd') return record.kd.toFixed(2);
-    if (metric === 'adr') return record.adr.toFixed(0);
-    return String(Math.round(value(record)));
-  }
-
-  /** Signed strength in [-1, 1] around each metric's neutral point; null for magnitude only. */
-  function polarity(record: MapStats) {
-    if (metric === 'winRate') return clamp((record.winRate - 50) / 25);
-    if (metric === 'kd') return clamp((record.kd - 1) / 0.4);
-    if (metric === 'adr') return clamp((record.adr - 80) / 25);
-    return null;
-  }
 
   const clamp = (value: number) => Math.max(-1, Math.min(1, value));
+  /** Signed distance from even: 50% won, or a K/D of 1. */
+  const lean = (value: number) => clamp(metric === 'winRate' ? (value - 50) / 25 : (value - 1) / 0.5);
+  // Capped at 32% so the small match count stays readable on the strongest tint.
+  const tint = (value: number) => {
+    const amount = lean(value);
+    if (Math.abs(amount) < 0.02) return undefined;
+    return `color-mix(in srgb, var(${amount > 0 ? '--win' : '--loss'}) ${Math.round(Math.abs(amount) * 32)}%, var(--cell))`;
+  };
+  const text = (value: number) => (metric === 'winRate' ? fixed(value) : fixed(value, 2));
 
-  function fill(record: MapStats) {
-    if (record.matches < FEW) return 'transparent';
-    const signed = polarity(record);
-    if (signed === null) return `rgb(var(--ink-rgb) / ${(0.05 + 0.3 * (record.matches / peak)).toFixed(3)})`;
-    const alpha = (0.06 + 0.32 * Math.abs(signed)).toFixed(3);
-    return signed >= 0 ? `rgb(var(--win-rgb) / ${alpha})` : `rgb(var(--loss-rgb) / ${alpha})`;
+  const pick = (record: MapStats) => (metric === 'winRate' ? record.winRate : record.kd);
+  const togetherValue = (record: { matches: number; wins: number; kills: number; deaths: number }) =>
+    metric === 'winRate' ? (record.wins / record.matches) * 100 : record.deaths ? record.kills / record.deaths : record.kills;
+
+  const steps = $derived(metric === 'winRate' ? [30, 40, 50, 60, 70] : [0.5, 0.75, 1, 1.25, 1.5]);
+
+  function toggle(playerId: string) {
+    if (leftOut.has(playerId)) leftOut.delete(playerId);
+    else leftOut.add(playerId);
   }
-
-  function togetherFill(wins: number, matches: number) {
-    if (matches < 5) return 'transparent';
-    const signed = clamp(((wins / matches) * 100 - 50) / 25);
-    const alpha = (0.06 + 0.32 * Math.abs(signed)).toFixed(3);
-    return signed >= 0 ? `rgb(var(--win-rgb) / ${alpha})` : `rgb(var(--loss-rgb) / ${alpha})`;
-  }
-
-  const neutral = $derived(
-    metric === 'winRate' ? '50%' : metric === 'kd' ? '1.00' : metric === 'adr' ? '80' : null
-  );
 </script>
 
 <div class="section-head">
   <h2>Maps</h2>
-  <span class="meta">Lifetime, 5v5</span>
-</div>
-
-<div class="controls">
-  <div class="seg" role="group" aria-label="Map metric">
-    {#each METRICS as option (option.key)}
-      <button type="button" aria-pressed={metric === option.key} onclick={() => (metric = option.key)}>{option.label}</button>
-    {/each}
+  <span class="meta">Lifetime, 5v5 · Together: last {windowDays} days</span>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Map metric">
+      <button type="button" aria-pressed={metric === 'winRate'} onclick={() => (metric = 'winRate')}>Win %</button>
+      <button type="button" aria-pressed={metric === 'kd'} onclick={() => (metric = 'kd')}>K/D</button>
+    </div>
   </div>
-  <p class="legend push">
-    {#if neutral}
-      <span class="swatch" style:background="rgb(var(--loss-rgb) / 0.38)"></span>
-      <span>below {neutral}</span>
-      <span class="swatch" style:background="rgb(var(--win-rgb) / 0.38)"></span>
-      <span>above</span>
-    {:else}
-      <span class="swatch" style:background="rgb(var(--ink-rgb) / 0.08)"></span>
-      <span class="swatch" style:background="rgb(var(--ink-rgb) / 0.35)"></span>
-      <span>more matches</span>
-    {/if}
-    <span class="muted">Small figure: matches · faded under {FEW}</span>
-  </p>
 </div>
 
-<div class="scroll">
-  <table class="heat">
-    <thead>
-      <tr>
-        <th class="stick" scope="col"><span class="sr-only">Player</span></th>
-        {#each maps as entry (entry.map)}
-          <th scope="col">
-            {#if entry.image}<img src={entry.image} alt="" loading="lazy" />{/if}
-            {entry.map}
-          </th>
-        {/each}
-      </tr>
-    </thead>
-    <tbody>
-      {#if groupMaps.length}
+{#if rows.length && maps.length}
+  <div class="scroll">
+    <table class="heat">
+      <thead>
+        <tr>
+          <th class="stick"><span class="sr-only">Player</span></th>
+          {#each maps as entry (entry.map)}
+            <th scope="col" class="map">
+              {#if entry.image}<img src={entry.image} alt="" loading="lazy" />{:else}<span class="img"></span>{/if}
+              {entry.map}
+            </th>
+          {/each}
+        </tr>
+      </thead>
+      <tbody>
         <tr class="together">
-          <th class="stick" scope="row" title="Win rate when two or more of us were on the same team, last {windowDays} days">
-            Together <span class="muted">{windowDays}d</span>
+          <th class="stick" scope="row">
+            <span class="label">
+              Together
+              <span class="note">{windowDays}d{leftOut.size ? ` · ${leftOut.size} left out` : ''}</span>
+            </span>
           </th>
           {#each maps as entry (entry.map)}
             {@const record = together.get(entry.map)}
             <td>
               {#if record}
+                {@const value = togetherValue(record)}
+                {@const few = record.matches < FEW_TOGETHER}
                 <span
                   class="cell"
-                  class:few={record.matches < 5}
-                  style:background={togetherFill(record.wins, record.matches)}
-                  title="{record.wins} wins in {record.matches} games together"
+                  class:few
+                  style:background={few ? undefined : tint(value)}
+                  title="Together on {entry.map}: {record.wins}–{record.matches - record.wins} in {record.matches} games, K/D {fixed(record.deaths ? record.kills / record.deaths : record.kills, 2)}"
                 >
-                  <b>{Math.round((record.wins / record.matches) * 100)}</b><small>{record.matches}</small>
+                  <b>{text(value)}</b><small>{record.matches}</small>
                 </span>
               {:else}
-                <span class="cell empty">·</span>
+                <span class="cell empty">–</span>
               {/if}
             </td>
           {/each}
         </tr>
-      {/if}
-      {#each rows as player (player.playerId)}
-        <tr>
-          <th class="stick" scope="row">{player.displayName}</th>
-          {#each maps as entry (entry.map)}
-            {@const record = player.maps.find((candidate) => candidate.map === entry.map)}
-            <td>
-              {#if record}
-                <span
-                  class="cell"
-                  class:few={record.matches < FEW}
-                  style:background={fill(record)}
-                  title="{player.displayName} on {entry.map}: {record.matches} matches, {record.winRate}% won, {record.kd.toFixed(2)} K/D, {record.adr.toFixed(1)} ADR"
-                >
-                  <b>{text(record)}</b>{#if metric !== 'matches'}<small>{record.matches}</small>{/if}
-                </span>
-              {:else}
-                <span class="cell empty">·</span>
-              {/if}
-            </td>
-          {/each}
-        </tr>
-      {/each}
-    </tbody>
-  </table>
-</div>
+        {#each rows as player (player.playerId)}
+          {@const included = !leftOut.has(player.playerId)}
+          <tr>
+            <th class="stick" scope="row">
+              <label class="pick" class:out={!included}>
+                <input
+                  type="checkbox"
+                  checked={included}
+                  onchange={() => toggle(player.playerId)}
+                  aria-label="Count {player.displayName} in Together"
+                />
+                <Avatar src={player.avatar} name={player.displayName} />
+                <span class="name">{player.displayName}</span>
+              </label>
+            </th>
+            {#each maps as entry (entry.map)}
+              {@const record = player.maps.find((candidate) => candidate.map === entry.map)}
+              <td>
+                {#if record}
+                  {@const few = record.matches < FEW}
+                  <span
+                    class="cell"
+                    class:few
+                    style:background={few ? undefined : tint(pick(record))}
+                    title="{player.displayName} on {entry.map}: {record.matches} matches, {fixed(record.winRate)}% won, K/D {fixed(record.kd, 2)}, ADR {fixed(record.adr, 1)}"
+                  >
+                    <b>{text(pick(record))}</b><small>{record.matches}</small>
+                  </span>
+                {:else}
+                  <span class="cell empty">–</span>
+                {/if}
+              </td>
+            {/each}
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
+  <p class="legend">
+    <span class="key mono">
+      {metric === 'winRate' ? '30' : '0.50'}
+      <span class="scale" aria-hidden="true">
+        {#each steps as step (step)}<i style:background={tint(step) ?? 'var(--cell)'}></i>{/each}
+      </span>
+      {metric === 'winRate' ? '70 win %' : '1.50 K/D'}
+    </span>
+    <span class="key">Small figure: matches</span>
+    <span class="key">Uncoloured: under {FEW} matches, {FEW_TOGETHER} together</span>
+  </p>
+{:else}
+  <p class="none">No map record</p>
+{/if}
 
 <style>
-  .legend {
-    align-items: center;
-    color: var(--ink-2);
-    display: flex;
-    flex-wrap: wrap;
-    font-size: 12px;
-    gap: 4px 6px;
-  }
-
-  .legend .muted {
-    color: var(--muted);
-    margin-left: 12px;
-  }
-
-  .swatch {
-    display: inline-block;
-    height: 10px;
-    width: 10px;
-  }
-
   .heat {
-    border-collapse: collapse;
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .heat th,
-  .heat td {
-    padding: 0;
-    text-align: center;
+    border-collapse: separate;
+    border-spacing: 3px;
+    margin: 0 -3px;
     white-space: nowrap;
   }
 
-  .heat thead th {
-    border-bottom: 1px solid var(--ink);
-    color: var(--ink-2);
-    font-weight: 500;
-    padding: 0 2px 6px;
-    vertical-align: bottom;
-  }
-
-  .heat thead img {
-    background: var(--band);
-    display: block;
-    height: 26px;
-    margin: 0 auto 5px;
-    object-fit: cover;
-    width: 44px;
-  }
-
-  .heat tbody th {
-    font-weight: 500;
-    padding: 0 16px 0 0;
-    text-align: left;
+  th {
+    font-weight: 400;
+    padding: 0;
   }
 
   .stick {
     background: var(--page);
     left: 0;
     position: sticky;
+    text-align: left;
     z-index: 1;
   }
 
-  .together th,
-  .together td {
-    border-bottom: 1px solid var(--rule-2);
+  .map {
+    color: var(--ink-2);
+    font: 500 11px var(--sans);
     padding-bottom: 4px;
+    text-align: center;
+    vertical-align: bottom;
   }
 
-  .together + tr td,
-  .together + tr th {
-    padding-top: 4px;
+  .map img,
+  .map .img {
+    background: var(--cell);
+    border-radius: 2px;
+    display: block;
+    height: 30px;
+    margin: 0 auto 5px;
+    object-fit: cover;
+    width: 52px;
+  }
+
+  td {
+    padding: 0;
   }
 
   .cell {
+    align-items: center;
+    background: var(--cell);
+    border-radius: 3px;
     display: flex;
     flex-direction: column;
-    height: 40px;
+    height: 52px;
     justify-content: center;
-    line-height: 1.15;
-    margin: 2px 1px;
-    min-width: 56px;
+    line-height: 1.2;
+    width: 52px;
   }
 
   .cell b {
-    color: var(--ink);
-    font-size: 13px;
-    font-weight: 500;
+    font: 500 13px var(--mono);
   }
 
   .cell small {
     color: var(--ink-2);
-    font-size: 10.5px;
+    font: 10px var(--mono);
   }
 
   .cell.few b,
-  .cell.few small {
+  .cell.few small,
+  .cell.empty {
     color: var(--muted);
+  }
+
+  .cell.few b {
+    font-weight: 400;
   }
 
   .cell.empty {
-    color: var(--rule-2);
+    background: none;
+    box-shadow: inset 0 0 0 1px var(--rule);
   }
 
-  .muted {
+  .together th,
+  .together td {
+    padding-bottom: 8px;
+  }
+
+  .together .label {
+    font-weight: 600;
+  }
+
+  .note {
     color: var(--muted);
-    font-weight: 400;
+    font: 400 11px var(--mono);
+    margin-left: 6px;
+  }
+
+  .pick {
+    align-items: center;
+    cursor: pointer;
+    display: flex;
+    gap: 8px;
+    padding-right: 14px;
+  }
+
+  .pick input {
+    accent-color: var(--accent);
+    cursor: pointer;
+    height: 13px;
+    margin: 0;
+    width: 13px;
+  }
+
+  .name {
+    color: var(--ink-2);
+    font-size: 12.5px;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .pick.out .name {
+    color: var(--muted);
+  }
+
+  .legend {
+    margin-top: 12px;
+  }
+
+  .scale {
+    display: inline-flex;
+    gap: 2px;
+    margin: 0 4px;
+  }
+
+  .scale i {
+    border-radius: 2px;
+    display: block;
+    height: 10px;
+    width: 16px;
   }
 </style>

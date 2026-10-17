@@ -1,4 +1,4 @@
-import type { GameLine, GroupGame, PairRecord, PlayerMatch, Summary } from './types';
+import type { GameLine, GroupGame, GroupLineup, PairRecord, PlayerMatch, Summary, TogetherMap } from './types';
 
 /** A parsed FACEIT match-stats row with the fields only the server needs. */
 export interface HistoryMatch extends PlayerMatch {
@@ -134,15 +134,33 @@ export function pairRecords(games: GroupGame[]): PairRecord[] {
   return [...pairs.values()].sort((x, y) => y.matches - x.matches || y.winRate - x.winRate);
 }
 
-export function mapRecords(games: GroupGame[]) {
-  const maps = new Map<string, { map: string; matches: number; wins: number }>();
-  for (const game of games) {
-    const record = maps.get(game.map) ?? { map: game.map, matches: 0, wins: 0 };
+export function toLineup(game: GroupGame): GroupLineup {
+  return {
+    map: game.map,
+    won: game.won,
+    lines: game.lines.map(({ playerId, kills, deaths }) => ({ playerId, kills, deaths }))
+  };
+}
+
+/**
+ * Map records for the games where at least two of `chosen` were on the same team. Kills and
+ * deaths add up the chosen players only, so leaving someone out removes their share too.
+ */
+export function togetherMaps(lineups: GroupLineup[], chosen: ReadonlySet<string>) {
+  const maps = new Map<string, TogetherMap>();
+  for (const game of lineups) {
+    const lines = game.lines.filter((line) => chosen.has(line.playerId));
+    if (lines.length < 2) continue;
+    const record = maps.get(game.map) ?? { map: game.map, matches: 0, wins: 0, kills: 0, deaths: 0 };
     record.matches += 1;
     if (game.won) record.wins += 1;
+    for (const line of lines) {
+      record.kills += line.kills;
+      record.deaths += line.deaths;
+    }
     maps.set(game.map, record);
   }
-  return [...maps.values()].sort((a, b) => b.matches - a.matches || b.wins - a.wins);
+  return maps;
 }
 
 const DAY = 86_400;

@@ -1,21 +1,24 @@
 <script lang="ts">
   import {
-    DUELS,
     ELO,
-    OVERVIEW,
     SCOPES,
     allColumns,
+    columnGroups,
     formatValue,
-    isActive,
+    isLowSample,
+    sortByName,
     sortPlayers,
     type Column,
     type Scope,
     type View
   } from '$lib/columns';
-  import { timeAgo } from '$lib/format';
+  import { age } from '$lib/format';
   import type { SquadPlayer } from '$lib/types';
-  import Level from './Level.svelte';
+  import Avatar from './Avatar.svelte';
+  import Chevron from './Chevron.svelte';
+  import Elo from './Elo.svelte';
   import PlayerDetail from './PlayerDetail.svelte';
+  import ResultStrip from './ResultStrip.svelte';
 
   let {
     players,
@@ -24,74 +27,80 @@
     liveIds = new Set<string>()
   }: { players: SquadPlayer[]; now: number; isOwner?: boolean; liveIds?: Set<string> } = $props();
 
-  let view = $state<View>('overview');
+  let view = $state<View>('core');
   let chosenScope = $state<Scope>('last30');
-  let showAll = $state(false);
   let sortKey = $state('elo');
   let direction = $state<'asc' | 'desc'>('desc');
   let openId = $state<string | null>(null);
 
   // Duel and utility numbers only exist in FACEIT's lifetime record.
   const scope = $derived<Scope>(view === 'duels' ? 'lifetime' : chosenScope);
-  const groups = $derived(view === 'duels' ? DUELS : OVERVIEW);
+  const groups = $derived(columnGroups(view, scope));
   const columns = $derived(allColumns(groups));
-  const activeCount = $derived(players.filter(isActive).length);
-  const visible = $derived(showAll ? players : players.filter(isActive));
-  const sortColumn = $derived(columns.find((column) => column.key === sortKey) ?? ELO);
-  const rows = $derived(sortPlayers(visible, sortColumn, scope, direction));
-  const span = $derived(columns.length + (view === 'overview' ? 3 : 1));
+  /** Column keys that start a group, for the wider gap in front of them. */
+  const starts = $derived(new Set(groups.map((group) => group.columns[0].key)));
+  /** The chosen sort, or ELO when the chosen column isn't in this view. */
+  const sorting = $derived(
+    sortKey === 'name' || columns.some((column) => column.key === sortKey && !column.strip)
+      ? { key: sortKey, direction }
+      : { key: 'elo', direction: 'desc' as const }
+  );
+  const rows = $derived.by(() => {
+    if (sorting.key === 'name') return sortByName(players, sorting.direction);
+    const column = columns.find((entry) => entry.key === sorting.key) ?? ELO;
+    return sortPlayers(players, column, scope, sorting.direction);
+  });
 
-  function sortBy(column: Column) {
-    if (sortKey === column.key) direction = direction === 'desc' ? 'asc' : 'desc';
-    else {
-      sortKey = column.key;
-      direction = column.descending ? 'desc' : 'asc';
-    }
+  function sortBy(key: string) {
+    if (sorting.key === key) direction = sorting.direction === 'desc' ? 'asc' : 'desc';
+    else direction = key === 'name' ? 'asc' : 'desc';
+    sortKey = key;
   }
 
-  function setView(next: View) {
-    view = next;
-    if (!allColumns(next === 'duels' ? DUELS : OVERVIEW).some((column) => column.key === sortKey)) {
-      sortKey = 'elo';
-      direction = 'desc';
-    }
+  const ariaSort = (key: string) =>
+    sorting.key === key ? (sorting.direction === 'asc' ? 'ascending' : 'descending') : undefined;
+
+  function cellText(column: Column, player: SquadPlayer) {
+    const value = column.value(player, scope);
+    if (column.age) return age(value, now);
+    return column.text?.(player, scope) ?? formatValue(column, value);
   }
 
-  /** Fewer matches than the scope asks for: still shown, but quieter. */
-  function isLow(player: SquadPlayer) {
-    if (scope === 'lifetime') return (player.lifetime?.matches ?? 0) < 20;
-    const wanted = scope === 'last10' ? 10 : scope === 'last30' ? 30 : 100;
-    return (player.form[scope]?.matches ?? 0) < Math.min(wanted, 10);
+  function muted(column: Column, player: SquadPlayer) {
+    if (column.isSample) return true;
+    const value = column.value(player, scope);
+    if (column.quietZero && value === 0) return true;
+    const sample = column.sample?.(player);
+    return sample !== undefined && sample !== null && sample < 10;
   }
+
+  function aroundOne(column: Column, player: SquadPlayer) {
+    if (!column.aroundOne) return '';
+    const value = column.value(player, scope);
+    return value === null ? '' : value >= 1 ? 'pos' : 'neg';
+  }
+
+  const toggle = (player: SquadPlayer) => (openId = openId === player.playerId ? null : player.playerId);
 </script>
 
 <div class="section-head">
   <h2>Players</h2>
-</div>
-
-<div class="controls">
-  <div class="seg" role="group" aria-label="Columns">
-    <button type="button" aria-pressed={view === 'overview'} onclick={() => setView('overview')}>Overview</button>
-    <button type="button" aria-pressed={view === 'duels'} onclick={() => setView('duels')}>Duels &amp; utility</button>
-  </div>
-  <div class="seg" role="group" aria-label="Matches counted">
-    {#if view === 'duels'}
-      <button type="button" aria-pressed="true" disabled>Lifetime</button>
-    {:else}
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Matches counted">
       {#each SCOPES as option (option.key)}
-        <button type="button" aria-pressed={chosenScope === option.key} onclick={() => (chosenScope = option.key)}>
-          {option.label}
-        </button>
+        <button
+          type="button"
+          aria-pressed={scope === option.key}
+          disabled={view === 'duels' && option.key !== 'lifetime'}
+          onclick={() => (chosenScope = option.key)}>{option.label}</button
+        >
       {/each}
-    {/if}
-  </div>
-  <div class="seg push" role="group" aria-label="Players shown">
-    <button type="button" aria-pressed={!showAll} onclick={() => (showAll = false)}>
-      Active<span class="count">{activeCount}</span>
-    </button>
-    <button type="button" aria-pressed={showAll} onclick={() => (showAll = true)}>
-      Everyone<span class="count">{players.length}</span>
-    </button>
+    </div>
+    <span class="divider" aria-hidden="true"></span>
+    <div class="seg" role="group" aria-label="Columns">
+      <button type="button" aria-pressed={view === 'core'} onclick={() => (view = 'core')}>Core</button>
+      <button type="button" aria-pressed={view === 'duels'} onclick={() => (view = 'duels')}>Duels &amp; utility</button>
+    </div>
   </div>
 </div>
 
@@ -102,190 +111,125 @@
         <th class="stick"></th>
         <th></th>
         {#each groups as group (group.label)}
-          <th colspan={group.columns.length} class="group"><span>{group.label}</span></th>
+          <th colspan={group.columns.length} class="group gs">{group.label}</th>
         {/each}
-        {#if view === 'overview'}<th></th><th></th>{/if}
       </tr>
-      <tr>
-        <th class="l stick" scope="col">Player</th>
+      <tr class="cols">
+        <th class="l stick" class:sorted={sorting.key === 'name'} scope="col" aria-sort={ariaSort('name')}>
+          <button type="button" class="sort" onclick={() => sortBy('name')}>
+            Player{#if sorting.key === 'name'}<span class="arrow after" aria-hidden="true">{sorting.direction === 'asc' ? '▲' : '▼'}</span>{/if}
+          </button>
+        </th>
         {#each columns as column (column.key)}
           <th
             scope="col"
-            class:on={sortKey === column.key}
-            class:first={groups.some((group) => group.columns[0] === column)}
-            aria-sort={sortKey === column.key ? (direction === 'asc' ? 'ascending' : 'descending') : undefined}
+            class:gs={starts.has(column.key)}
+            class:sorted={sorting.key === column.key}
+            aria-sort={column.strip ? undefined : ariaSort(column.key)}
+            title={column.title}
           >
-            <button type="button" title={column.title} onclick={() => sortBy(column)}>
-              {#if sortKey === column.key}<span class="arrow" aria-hidden="true">{direction === 'asc' ? '▲' : '▼'}</span>{/if}{column.label}
-            </button>
+            {#if column.strip}
+              {column.label}
+            {:else}
+              <button type="button" class="sort" onclick={() => sortBy(column.key)}>
+                <span class="arrow" aria-hidden="true">{sorting.key === column.key ? (sorting.direction === 'asc' ? '▲' : '▼') : ''}</span>{column.label}
+              </button>
+            {/if}
           </th>
         {/each}
-        {#if view === 'overview'}
-          <th class="l first" scope="col">Last 10</th>
-          <th scope="col">Last match</th>
-        {/if}
       </tr>
     </thead>
     <tbody>
       {#each rows as player (player.playerId)}
         {@const open = openId === player.playerId}
-        {@const low = isLow(player)}
-        <tr class="row" class:open class:low>
+        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+        <tr class="row" class:open class:low={isLowSample(player, view, scope)} onclick={() => toggle(player)}>
           <th class="l stick" scope="row">
-            <button
-              type="button"
-              class="who"
-              aria-expanded={open}
-              onclick={() => (openId = open ? null : player.playerId)}
-            >
-              <svg class="chev" viewBox="0 0 10 10" aria-hidden="true"><path d="M3 1.5 6.5 5 3 8.5" /></svg>
-              <Level level={player.level} elo={player.elo} />
-              <span class="name">{player.displayName}</span>
+            <span class="who">
+              <Avatar src={player.avatar} name={player.displayName} />
+              <button
+                type="button"
+                class="name"
+                aria-expanded={open}
+                onclick={(event) => {
+                  event.stopPropagation();
+                  toggle(player);
+                }}>{player.displayName}</button
+              >
               {#if player.country}<span class="cc">{player.country}</span>{/if}
-              {#if liveIds.has(player.playerId)}<span class="in-match">in match</span>{/if}
-            </button>
+              {#if liveIds.has(player.playerId)}<span class="in-match" title="In a match"><span class="sr-only">In a match</span></span>{/if}
+              <span class="push"><Chevron /></span>
+            </span>
           </th>
           {#each columns as column (column.key)}
-            {@const value = column.value(player, scope)}
-            {@const sample = column.sample?.(player)}
-            <td
-              class:on={sortKey === column.key}
-              class:first={groups.some((group) => group.columns[0] === column)}
-              class:dim={sample !== undefined && sample !== null && sample < 10}
-            >
-              {column.text?.(player, scope) ?? formatValue(column, value)}{#if sample !== undefined && sample !== null}<span class="n"> {sample}</span>{/if}
-            </td>
+            {#if column.key === 'elo'}
+              <td class:sorted={sorting.key === 'elo'}>
+                <Elo elo={player.elo} level={player.level} />
+              </td>
+            {:else if column.strip}
+              <td class="gs">
+                <ResultStrip results={player.recent.slice(0, 10).reverse().map((match) => match.won)} />
+              </td>
+            {:else}
+              <td
+                class="{aroundOne(column, player)}"
+                class:gs={starts.has(column.key)}
+                class:sorted={sorting.key === column.key}
+                class:low={muted(column, player)}
+              >
+                {cellText(column, player)}
+              </td>
+            {/if}
           {/each}
-          {#if view === 'overview'}
-            <td class="l first">
-              <span class="results" aria-label="Last {Math.min(10, player.recent.length)} results">
-                {#each player.recent.slice(0, 10) as match, index (index)}<i class:win={match.won}></i>{/each}
-              </span>
-            </td>
-            <td class="last">{player.lastMatchAt ? timeAgo(player.lastMatchAt, now) : '—'}</td>
-          {/if}
         </tr>
         {#if open}
           <tr class="detail">
-            <td colspan={span}>
-              <PlayerDetail {player} {now} {isOwner} />
+            <td colspan={columns.length + 1}>
+              <div class="pin">
+                <PlayerDetail {player} {now} {isOwner} />
+              </div>
             </td>
           </tr>
         {/if}
+      {:else}
+        <tr><td class="l muted" colspan={columns.length + 1}>No players</td></tr>
       {/each}
     </tbody>
   </table>
 </div>
 
 <style>
-  .seg button:disabled {
-    cursor: default;
-  }
-
-  .players th button {
+  .players button.name {
     background: none;
     border: 0;
-    color: inherit;
     cursor: pointer;
-    font: inherit;
     padding: 0;
+    text-align: left;
   }
 
-  .players thead th button:hover {
-    color: var(--ink);
-  }
-
-  .players thead th.on {
-    color: var(--ink);
-    font-weight: 600;
-  }
-
-  .arrow {
-    font-size: 9px;
-    margin-right: 3px;
-    vertical-align: 1px;
-  }
-
-  .players .first {
-    padding-left: 18px;
-  }
-
-  .groups .group {
-    padding-left: 18px;
-  }
-
-  .players td.on {
-    background: var(--band);
-  }
-
-  .row:hover > *,
-  .row:hover > td.on {
-    background: var(--hover);
-  }
-
-  .row.open > * {
-    border-bottom-color: transparent;
-  }
-
-  .who {
-    align-items: center;
-    display: inline-flex;
-    gap: 8px;
-  }
-
-  .name {
-    font-weight: 500;
-  }
-
-  .cc {
-    color: var(--muted);
-    font-size: 11px;
+  .arrow.after {
+    margin: 0 0 0 4px;
   }
 
   .in-match {
-    color: var(--accent);
-    font-size: 11px;
-    font-weight: 600;
-  }
-
-  .chev {
-    fill: none;
+    background: var(--accent);
+    border-radius: 50%;
     flex: none;
-    height: 10px;
-    stroke: var(--muted);
-    stroke-width: 1.5;
-    transition: transform 0.15s ease;
-    width: 10px;
+    height: 7px;
+    width: 7px;
   }
 
-  [aria-expanded='true'] > .chev {
-    transform: rotate(90deg);
+  .push {
+    margin-left: auto;
+    padding-left: 10px;
   }
 
-  .n {
-    color: var(--muted);
-    font-size: 11px;
-  }
-
-  .dim {
+  .players tr.low td.pos,
+  .players tr.low td.neg {
     color: var(--muted);
   }
 
-  .last {
-    color: var(--ink-2);
-  }
-
-  .detail > td {
-    background: var(--page);
-    border-bottom: 1px solid var(--ink);
-    padding: 0;
-    text-align: left;
-    white-space: normal;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .chev {
-      transition: none;
-    }
+  td.muted {
+    color: var(--muted);
   }
 </style>

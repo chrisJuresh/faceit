@@ -1,6 +1,7 @@
 <script lang="ts">
-  import '@fontsource-variable/libre-franklin';
-  import '@fontsource-variable/newsreader/opsz.css';
+  import '@fontsource-variable/archivo/wdth.css';
+  import '@fontsource-variable/chivo';
+  import '@fontsource-variable/chivo-mono';
   import '../app.css';
 
   let { children } = $props();

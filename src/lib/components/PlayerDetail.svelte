@@ -1,160 +1,191 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import { dateTime, resultText, timeAgo } from '$lib/format';
+  import { age, dateTime, fixed, headshotRate, kd, monthYear, roomUrl, score, thousands, timeAgo } from '$lib/format';
   import { eloToNextLevel, levelForElo } from '$lib/levels';
   import type { SquadPlayer } from '$lib/types';
-  import FormChart from './FormChart.svelte';
+  import Avatar from './Avatar.svelte';
+  import FormChart, { type FormMetric } from './FormChart.svelte';
+  import WinTrack from './WinTrack.svelte';
 
   let { player, now, isOwner = false }: { player: SquadPlayer; now: number; isOwner?: boolean } =
     $props();
 
-  let allMatches = $state(false);
-  let metric = $state<'adr' | 'kd'>('adr');
+  const METRICS: Array<{ key: FormMetric; label: string }> = [
+    { key: 'adr', label: 'ADR' },
+    { key: 'kd', label: 'K/D' },
+    { key: 'kills', label: 'Kills' },
+    { key: 'hs', label: 'HS %' }
+  ];
 
+  let metric = $state<FormMetric>('adr');
+  let allMatches = $state(false);
+
+  const life = $derived(player.lifetime);
   const toNext = $derived(player.elo ? eloToNextLevel(player.elo) : null);
   const matches = $derived(allMatches ? player.recent : player.recent.slice(0, 10));
-  const life = $derived(player.lifetime);
-  const memberSince = $derived(
-    player.memberSince
-      ? new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(
-          new Date(player.memberSince * 1000)
-        )
-      : null
-  );
-  const roomUrl = (matchId: string) => `https://www.faceit.com/en/cs2/room/${matchId}`;
-  const signed = (value: number) => (value > 0 ? `+${value}` : value < 0 ? `−${-value}` : '0');
+  const rank = (position: number | null) => (position ? `#${position.toLocaleString('en-GB')}` : 'Unranked');
 </script>
 
 <div class="detail">
   <div class="grid">
-    <div>
-      <dl class="facts">
+    <div class="profile">
+      <div class="identity">
+        <Avatar src={player.avatar} name={player.displayName} size={44} />
+        <div>
+          <p class="big">{player.displayName}</p>
+          <p class="sub">
+            {[player.country, player.region, player.level ? `level ${player.level}` : ''].filter(Boolean).join(' · ')}
+          </p>
+        </div>
+      </div>
+      <dl class="kv">
         <dt>ELO</dt>
-        <dd>{player.elo ? player.elo.toLocaleString('en-GB') : '—'}</dd>
+        <dd>{player.elo ? thousands(player.elo) : '—'}</dd>
         {#if toNext !== null}
           <dt>To level {levelForElo(player.elo) + 1}</dt>
           <dd>{toNext}</dd>
         {/if}
         <dt>{player.region || 'Region'} rank</dt>
-        <dd>{player.regionRank ? `#${player.regionRank.toLocaleString('en-GB')}` : 'Unranked'}</dd>
+        <dd>{rank(player.regionRank)}</dd>
         {#if player.country}
           <dt>{player.country} rank</dt>
-          <dd>{player.countryRank ? `#${player.countryRank.toLocaleString('en-GB')}` : 'Unranked'}</dd>
+          <dd>{rank(player.countryRank)}</dd>
+        {/if}
+        {#if player.memberSince}
+          <dt>Member since</dt>
+          <dd>{monthYear(player.memberSince)}</dd>
         {/if}
         <dt>Last match</dt>
-        <dd>{player.lastMatchAt ? timeAgo(player.lastMatchAt, now) : '—'}</dd>
-        <dt>Played 7/30/90d</dt>
-        <dd>{player.played.days7} / {player.played.days30} / {player.played.days90}</dd>
+        <dd>{timeAgo(player.lastMatchAt, now)}</dd>
         {#if life}
-          <dt>Lifetime</dt>
-          <dd>{life.matches.toLocaleString('en-GB')} <span class="muted">{life.wins}–{life.matches - life.wins}</span></dd>
+          <dt>Lifetime matches</dt>
+          <dd>{thousands(life.matches)}</dd>
           <dt>Win streak</dt>
-          <dd>{life.currentStreak} <span class="muted">best {life.longestStreak}</span></dd>
-        {/if}
-        {#if memberSince}
-          <dt>On FACEIT since</dt>
-          <dd>{memberSince}</dd>
-        {/if}
-        {#if player.steamName}
-          <dt>Steam</dt>
-          <dd class="clip">{player.steamName}</dd>
+          <dd>{life.currentStreak}<span class="muted">best {life.longestStreak}</span></dd>
         {/if}
       </dl>
       <p class="links">
-        <a href={player.faceitUrl} target="_blank" rel="noreferrer">FACEIT ↗</a>
-        {#if player.steamUrl}<a href={player.steamUrl} target="_blank" rel="noreferrer">Steam ↗</a>{/if}
+        <a class="ext" href={player.faceitUrl} target="_blank" rel="noreferrer">FACEIT ↗</a>
+        {#if player.steamUrl}<a class="ext" href={player.steamUrl} target="_blank" rel="noreferrer">Steam ↗</a>{/if}
       </p>
     </div>
 
-    <div>
-      <div class="sub">
+    <div class="form">
+      <div class="mini-head">
         <h4>Last {player.recent.length} matches</h4>
         {#if player.recent.length}
           <div class="seg small" role="group" aria-label="Chart metric">
-            <button type="button" aria-pressed={metric === 'adr'} onclick={() => (metric = 'adr')}>ADR</button>
-            <button type="button" aria-pressed={metric === 'kd'} onclick={() => (metric = 'kd')}>K/D</button>
+            {#each METRICS as option (option.key)}
+              <button type="button" aria-pressed={metric === option.key} onclick={() => (metric = option.key)}>
+                {option.label}
+              </button>
+            {/each}
           </div>
         {/if}
       </div>
       {#if player.recent.length}
         <FormChart matches={player.recent} {metric} />
+        <p class="legend">
+          <span class="key"><i class="swatch win"></i>Win</span>
+          <span class="key"><i class="swatch loss"></i>Loss</span>
+          <span class="key"><i class="line"></i>Average</span>
+        </p>
       {:else}
-        <p class="none">No recent 5v5 matches.</p>
+        <p class="none">No recent 5v5 matches</p>
       {/if}
     </div>
 
-    <div>
-      <div class="sub"><h4>Maps <span class="muted">lifetime</span></h4></div>
+    <div class="maps">
+      <div class="mini-head"><h4>Maps, lifetime</h4></div>
       {#if player.maps.length}
         <div class="scroll">
-        <table class="tbl mini">
-          <thead>
-            <tr><th class="l" scope="col">Map</th><th scope="col">M</th><th scope="col">Win %</th><th scope="col">K/D</th><th scope="col">ADR</th><th scope="col">HS %</th></tr>
-          </thead>
-          <tbody>
-            {#each player.maps as map (map.map)}
-              <tr class:low={map.matches < 10}>
-                <th class="l" scope="row">{map.map}</th>
-                <td>{map.matches}</td>
-                <td>{map.winRate.toFixed(0)}</td>
-                <td>{map.kd.toFixed(2)}</td>
-                <td>{map.adr.toFixed(1)}</td>
-                <td>{map.headshots.toFixed(0)}</td>
+          <table class="mini">
+            <thead>
+              <tr>
+                <th class="l" scope="col">Map</th>
+                <th scope="col">M</th>
+                <th scope="col">Win %</th>
+                <th scope="col"><span class="sr-only">Win rate from 0 to 100, 50 marked</span></th>
+                <th scope="col">K/D</th>
+                <th scope="col">ADR</th>
+                <th scope="col">HS %</th>
               </tr>
-            {/each}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {#each player.maps as map (map.map)}
+                <tr class:low={map.matches < 10}>
+                  <td class="l">{map.map}</td>
+                  <td>{map.matches}</td>
+                  <td>{fixed(map.winRate)}</td>
+                  <td class="l"><WinTrack rate={map.winRate} faded={map.matches < 10} /></td>
+                  <td>{fixed(map.kd, 2)}</td>
+                  <td>{fixed(map.adr, 1)}</td>
+                  <td>{fixed(map.headshots)}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
         </div>
       {:else}
-        <p class="none">No map record.</p>
+        <p class="none">No map record</p>
       {/if}
     </div>
   </div>
 
   {#if player.recent.length}
     <div class="matches">
-      <h4>Matches</h4>
+      <div class="mini-head"><h4>Matches</h4></div>
       <div class="scroll">
-        <table class="tbl mini">
+        <table class="mini">
           <thead>
             <tr>
               <th class="l" scope="col">When</th>
               <th class="l" scope="col">Map</th>
-              <th class="l" scope="col">Result</th>
-              <th scope="col">K</th><th scope="col">D</th><th scope="col">A</th>
-              <th scope="col" title="Kills minus deaths">+/−</th>
-              <th scope="col">ADR</th><th scope="col">HS %</th><th scope="col">MVPs</th>
-              <th scope="col">3K</th><th scope="col">4K</th><th scope="col">5K</th>
+              <th scope="col"><span class="sr-only">Result</span></th>
+              <th scope="col">Score</th>
+              <th scope="col">K</th>
+              <th scope="col">D</th>
+              <th scope="col">A</th>
+              <th scope="col">K/D</th>
+              <th scope="col">ADR</th>
+              <th scope="col">HS %</th>
+              <th scope="col">MVP</th>
+              <th scope="col">2K</th>
+              <th scope="col">3K</th>
+              <th scope="col">4K</th>
+              <th scope="col">5K</th>
+              <th scope="col"><span class="sr-only">Match room</span></th>
             </tr>
           </thead>
           <tbody>
             {#each matches as match, index (index)}
               <tr>
-                <td class="l" title={dateTime(match.finishedAt)}>{timeAgo(match.finishedAt, now)}</td>
+                <td class="l muted" title={dateTime(match.finishedAt)}>{age(match.finishedAt, now)}</td>
                 <td class="l">{match.map}</td>
-                <td class="l">
-                  <a class="res" class:win={match.won} class:loss={!match.won} href={roomUrl(match.matchId)} target="_blank" rel="noreferrer">
-                    {resultText(match.won, match.teamScore, match.enemyScore)}
-                  </a>
-                </td>
+                <td><span class="res" class:win={match.won} class:loss={!match.won}>{match.won ? 'W' : 'L'}</span></td>
+                <td>{score(match.teamScore, match.enemyScore)}</td>
                 <td>{match.kills}</td>
                 <td>{match.deaths}</td>
                 <td>{match.assists}</td>
-                <td class:pos={match.kills > match.deaths} class:neg={match.kills < match.deaths}>{signed(match.kills - match.deaths)}</td>
-                <td>{match.adr.toFixed(1)}</td>
-                <td>{match.kills ? Math.round((match.headshots / match.kills) * 100) : '—'}</td>
-                <td>{match.mvps}</td>
-                <td>{match.tripleKills || ''}</td>
-                <td>{match.quadroKills || ''}</td>
-                <td>{match.pentaKills || ''}</td>
+                <td>{fixed(kd(match.kills, match.deaths), 2)}</td>
+                <td>{fixed(match.adr, 1)}</td>
+                <td>{headshotRate(match.headshots, match.kills)}</td>
+                <td class:muted={!match.mvps}>{match.mvps}</td>
+                <td class:muted={!match.doubleKills}>{match.doubleKills}</td>
+                <td class:muted={!match.tripleKills}>{match.tripleKills}</td>
+                <td class:muted={!match.quadroKills}>{match.quadroKills}</td>
+                <td class:muted={!match.pentaKills}>{match.pentaKills}</td>
+                <td>
+                  <a class="ext" href={roomUrl(match.matchId)} target="_blank" rel="noreferrer" aria-label="Match room">↗</a>
+                </td>
               </tr>
             {/each}
           </tbody>
         </table>
       </div>
       {#if player.recent.length > 10}
-        <button class="link-button" type="button" onclick={() => (allMatches = !allMatches)}>
-          {allMatches ? 'Show the last 10' : `Show all ${player.recent.length}`}
+        <button class="text-button more" type="button" onclick={() => (allMatches = !allMatches)}>
+          {allMatches ? 'Show 10' : `Show all ${player.recent.length}`}
         </button>
       {/if}
     </div>
@@ -172,100 +203,79 @@
 
 <style>
   .detail {
-    left: 0;
-    padding: 18px 0 30px;
-    position: sticky;
-    width: min(100%, calc(100vw - 2 * var(--gutter)));
+    padding: 20px 16px 24px;
   }
 
   .grid {
     display: grid;
-    gap: 24px 44px;
-    grid-template-columns: 230px minmax(0, 1.3fr) minmax(0, 1fr);
+    gap: 36px;
+    grid-template-columns: minmax(230px, 3fr) minmax(0, 5fr) minmax(0, 4fr);
   }
 
-  .facts {
-    display: grid;
-    font-size: 13px;
-    gap: 5px 14px;
-    grid-template-columns: auto 1fr;
-    margin: 0;
+  .identity {
+    align-items: center;
+    display: flex;
+    gap: 12px;
+    margin-bottom: 14px;
   }
 
-  .facts dt {
+  .big {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .sub {
     color: var(--muted);
-  }
-
-  .facts dd {
-    font-variant-numeric: tabular-nums;
-    margin: 0;
-    text-align: right;
-  }
-
-  .facts .muted {
-    margin-left: 4px;
-  }
-
-  .clip {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font: 11.5px var(--mono);
   }
 
   .links {
     display: flex;
-    font-size: 13px;
-    gap: 18px;
+    gap: 16px;
     margin-top: 14px;
   }
 
-  .sub {
+  .mini-head {
     align-items: baseline;
     display: flex;
     gap: 12px;
-    justify-content: space-between;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
   }
 
   h4 {
-    font: 600 13px/1.3 var(--sans);
-    margin-bottom: 8px;
-  }
-
-  h4 .muted {
-    font-weight: 400;
-    margin-left: 4px;
+    color: var(--ink-2);
+    font: 600 12px/20px var(--sans);
   }
 
   .seg.small {
-    font-size: 12px;
-    gap: 14px;
+    margin-left: auto;
   }
 
-  .mini {
-    font-size: 12.5px;
+  .seg.small button {
+    font-size: 11.5px;
+    padding: 3px 5px;
   }
 
-  .mini th,
-  .mini td {
-    padding: 5px 7px;
+  .legend {
+    margin-top: 6px;
+  }
+
+  .mini td.muted {
+    color: var(--muted);
+  }
+
+  .mini a {
+    text-decoration: none;
   }
 
   .matches {
-    margin-top: 26px;
+    margin-top: 24px;
   }
 
   .matches .mini {
-    min-width: min(100%, 640px);
     width: auto;
-  }
-
-  .matches .mini :is(td, th) {
-    padding-left: 14px;
-  }
-
-  .matches .mini :is(td, th):first-child {
-    padding-left: 0;
+    min-width: min(100%, 720px);
   }
 
   .alias {
@@ -273,9 +283,9 @@
     border-top: 1px solid var(--rule);
     display: flex;
     flex-wrap: wrap;
-    font-size: 13px;
+    font-size: 12.5px;
     gap: 8px 12px;
-    margin-top: 24px;
+    margin-top: 22px;
     padding-top: 12px;
   }
 
@@ -293,28 +303,33 @@
   }
 
   .alias input:focus {
-    border-bottom-color: var(--ink);
+    border-bottom-color: var(--accent);
     outline: none;
   }
 
-  @media (max-width: 1000px) {
+  @media (max-width: 1060px) {
     .grid {
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     }
 
-    .grid > :nth-child(2) {
+    .form {
       grid-column: 1 / -1;
-      order: 3;
+      grid-row: 2;
     }
   }
 
-  @media (max-width: 760px) {
-    .grid {
-      grid-template-columns: 1fr;
+  @media (max-width: 640px) {
+    .detail {
+      padding: 16px 0 20px;
     }
 
-    .grid > :nth-child(2) {
-      order: 0;
+    .grid {
+      gap: 24px;
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .form {
+      grid-row: auto;
     }
   }
 </style>

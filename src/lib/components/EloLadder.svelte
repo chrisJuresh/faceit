@@ -1,72 +1,74 @@
 <script lang="ts">
-  import { LEVEL_FLOORS, eloToNextLevel, levelVar } from '$lib/levels';
+  import { LEVEL_FLOORS, eloToNextLevel, levelForElo, levelVar } from '$lib/levels';
   import type { SquadPlayer } from '$lib/types';
 
+  /** Each player's ELO against FACEIT's level bands, with a leader line to the next level. */
   let { players }: { players: SquadPlayer[] } = $props();
 
   const ranked = $derived(players.filter((player) => player.elo > 0).sort((a, b) => b.elo - a.elo));
+  const low = $derived(Math.min(500, Math.floor((Math.min(...ranked.map((p) => p.elo)) - 40) / 50) * 50));
+  const high = $derived(Math.max(2150, Math.ceil((Math.max(...ranked.map((p) => p.elo)) + 80) / 50) * 50));
+  const x = (elo: number) => ((Math.min(Math.max(elo, low), high) - low) / (high - low)) * 100;
 
-  // Span the levels the group occupies, starting at the lowest player's level.
-  const lowLevel = $derived(Math.max(1, Math.min(...ranked.map((p) => p.level))));
-  const min = $derived(LEVEL_FLOORS[lowLevel - 1]);
-  const max = $derived(
-    Math.max(
-      LEVEL_FLOORS[Math.min(9, Math.max(...ranked.map((p) => p.level)))] ?? 0,
-      ...ranked.map((p) => p.elo + 60),
-      2100
-    )
-  );
   const bands = $derived(
     LEVEL_FLOORS.map((floor, index) => ({
       level: index + 1,
-      from: Math.max(floor, min),
-      to: Math.min(LEVEL_FLOORS[index + 1] ?? max, max)
-    })).filter((band) => band.to - band.from > 0)
+      from: x(Math.max(floor, low)),
+      to: x(Math.min(LEVEL_FLOORS[index + 1] ?? high, high))
+    })).filter((band) => band.to - band.from > 1.5)
   );
-  const x = (elo: number) => ((Math.min(Math.max(elo, min), max) - min) / (max - min)) * 100;
+  const floors = $derived(LEVEL_FLOORS.slice(1).filter((floor) => floor > low && floor < high).map(x));
 </script>
 
 {#if ranked.length}
-  <figure class="ladder">
+  <figure class="ladder" aria-label="ELO per player against FACEIT level bands">
     <div class="row scale" aria-hidden="true">
       <span></span>
       <span class="track">
         {#each bands as band (band.level)}
-          <span class="band" style:left="{x(band.from)}%" style:width="{x(band.to) - x(band.from)}%" style:--level={levelVar(band.level)}>
-            <span>{band.level}</span>
+          <span
+            class="band"
+            style:left="calc({band.from}% + 1px)"
+            style:width="calc({band.to - band.from}% - 2px)"
+            style:--level={levelVar(band.level)}
+          >
+            <span class="number">{band.level}</span>
           </span>
         {/each}
+        {#each floors as floor (floor)}<i class="floor" style:left="{floor}%"></i>{/each}
       </span>
-      <span class="value-head">ELO</span>
-      <span class="value-head">To next</span>
+      <span></span>
     </div>
     <ol>
       {#each ranked as player (player.playerId)}
         {@const next = eloToNextLevel(player.elo)}
+        {@const level = player.level || levelForElo(player.elo)}
         <li class="row">
-          <span class="who">{player.displayName}</span>
+          <span class="name">{player.displayName}</span>
           <span class="track">
-            {#each bands as band (band.level)}
-              <span class="rule" style:left="{x(band.from)}%"></span>
-            {/each}
+            {#each floors as floor (floor)}<i class="floor" style:left="{floor}%"></i>{/each}
             {#if next !== null}
-              <span class="lead" style:left="{x(player.elo)}%" style:width="{x(player.elo + next) - x(player.elo)}%"></span>
+              <i
+                class="lead"
+                style:left="{x(player.elo)}%"
+                style:width="{x(player.elo + next) - x(player.elo)}%"
+                style:--level={levelVar(level)}
+              ></i>
+              <span class="gap" style:left="{x(player.elo + next)}%">{next}<span class="sr-only"> to level {level + 1}</span></span>
             {/if}
-            <span class="dot" style:left="{x(player.elo)}%" style:--level={levelVar(player.level)}></span>
+            <i class="dot" style:left="{x(player.elo)}%" style:--level={levelVar(level)}></i>
           </span>
           <span class="value">{player.elo.toLocaleString('en-GB')}</span>
-          <span class="next">{next === null ? '—' : next}</span>
         </li>
       {/each}
     </ol>
   </figure>
 {:else}
-  <p class="none">No ELO to show.</p>
+  <p class="none">No ELO to show</p>
 {/if}
 
 <style>
   .ladder {
-    font-size: 12px;
     margin: 0;
   }
 
@@ -79,16 +81,18 @@
   .row {
     align-items: center;
     display: grid;
-    gap: 12px;
-    grid-template-columns: minmax(90px, 128px) minmax(0, 1fr) 44px 48px;
-    height: 23px;
+    gap: 0 12px;
+    grid-template-columns: minmax(80px, 112px) minmax(0, 1fr) 48px;
+    height: 24px;
   }
 
   .scale {
-    height: 26px;
+    height: 30px;
   }
 
-  .who {
+  .name {
+    color: var(--ink-2);
+    font-size: 12px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -100,21 +104,27 @@
   }
 
   .band {
-    border-top: 3px solid var(--level);
-    bottom: 4px;
-    color: var(--muted);
+    background: var(--level);
+    border-radius: 1px;
+    height: 3px;
     position: absolute;
-    text-align: center;
-    top: 2px;
+    top: 18px;
   }
 
-  .band span {
-    display: block;
-    font-size: 11px;
-    padding-top: 3px;
+  .band .number {
+    color: var(--muted);
+    font: 10px var(--mono);
+    left: 50%;
+    position: absolute;
+    top: -16px;
+    transform: translateX(-50%);
   }
 
-  .rule {
+  .scale .floor {
+    top: 24px;
+  }
+
+  .floor {
     background: var(--rule);
     bottom: 0;
     position: absolute;
@@ -123,38 +133,35 @@
   }
 
   .lead {
-    border-top: 1px solid var(--rule-2);
-    height: 0;
+    background: var(--level);
+    height: 2px;
+    opacity: 0.4;
+    position: absolute;
+    top: calc(50% - 1px);
+  }
+
+  .gap {
+    color: var(--muted);
+    font: 10px var(--mono);
+    margin-left: 5px;
     position: absolute;
     top: 50%;
+    transform: translateY(-50%);
   }
 
   .dot {
     background: var(--level);
-    border: 2px solid var(--page);
     border-radius: 50%;
-    height: 12px;
+    box-shadow: 0 0 0 2px var(--surface);
+    height: 9px;
+    margin-left: -4.5px;
     position: absolute;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    width: 12px;
+    top: calc(50% - 4.5px);
+    width: 9px;
   }
 
-  .value,
-  .next,
-  .value-head {
-    font-variant-numeric: tabular-nums;
+  .value {
+    font: 12px var(--mono);
     text-align: right;
-  }
-
-  .next,
-  .value-head {
-    color: var(--muted);
-  }
-
-  .value-head {
-    align-self: end;
-    font-size: 11px;
-    padding-bottom: 4px;
   }
 </style>

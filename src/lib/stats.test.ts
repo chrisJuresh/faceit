@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   groupGames,
-  mapRecords,
   pairRecords,
   summarize,
+  toLineup,
   toPlayerMatch,
+  togetherMaps,
   weekStart,
   weeklyActivity,
   type HistoryMatch
@@ -99,10 +100,49 @@ describe('group games', () => {
     expect(groupGames(players).some((game) => game.matchId === 'm3')).toBe(false);
   });
 
-  it('counts pairs and map records from the grouped games', () => {
+  it('counts pairs from the grouped games', () => {
     const games = groupGames(players);
     expect(pairRecords(games)).toEqual([{ a: 'a', b: 'b', matches: 1, wins: 1, winRate: 100 }]);
-    expect(mapRecords(games)).toEqual([{ map: 'Mirage', matches: 1, wins: 1 }]);
+  });
+});
+
+describe('together maps', () => {
+  const lineup = (map: string, won: boolean, ids: string[]) => ({
+    map,
+    won,
+    lines: ids.map((playerId) => ({ playerId, kills: 10, deaths: 5 }))
+  });
+  const lineups = [
+    lineup('Mirage', true, ['a', 'b', 'c']),
+    lineup('Mirage', false, ['a', 'c']),
+    lineup('Dust2', true, ['b', 'c'])
+  ];
+
+  it('keeps only who played and how it went', () => {
+    const [game] = groupGames([
+      { playerId: 'a', matches: [match({ kills: 25, deaths: 9 })] },
+      { playerId: 'b', matches: [match({ kills: 12, deaths: 14 })] }
+    ]);
+    expect(toLineup(game)).toEqual({
+      map: 'Mirage',
+      won: true,
+      lines: [
+        { playerId: 'a', kills: 25, deaths: 9 },
+        { playerId: 'b', kills: 12, deaths: 14 }
+      ]
+    });
+  });
+
+  it('counts every game when everyone is chosen', () => {
+    const maps = togetherMaps(lineups, new Set(['a', 'b', 'c']));
+    expect(maps.get('Mirage')).toEqual({ map: 'Mirage', matches: 2, wins: 1, kills: 50, deaths: 25 });
+    expect(maps.get('Dust2')?.matches).toBe(1);
+  });
+
+  it('drops games left with fewer than two chosen teammates, and their kills', () => {
+    const maps = togetherMaps(lineups, new Set(['a', 'b']));
+    expect(maps.get('Mirage')).toEqual({ map: 'Mirage', matches: 1, wins: 1, kills: 20, deaths: 10 });
+    expect(maps.has('Dust2')).toBe(false);
   });
 });
 
