@@ -37,7 +37,8 @@ const DAY = 86_400;
 /** Group numbers cover this many days; busy players get extra pages to reach back that far. */
 export const WINDOW_DAYS = 90;
 const PAGE_SIZE = 100;
-const MAX_PAGES = 3;
+/** 1,500 maps in 90 days. Past that the window shrinks to what was read rather than undercount. */
+const MAX_PAGES = 15;
 const RECENT_MATCHES = 30;
 const GROUP_GAMES = 40;
 const ACTIVITY_DAYS = 14;
@@ -188,16 +189,25 @@ export function parseLifetime(stats: FaceitLifetimeStats | null, maps: MapStats[
   };
 }
 
-/** Latest page of matches, plus older pages while they still fall inside the window. */
+/**
+ * Latest page of matches, plus older pages while they still fall inside the window. `readFrom` is
+ * how far back the matches are complete: null when the window (or the whole history) was read,
+ * otherwise the oldest time read, because the page cap was hit or an older page failed.
+ */
 async function recentMatches(playerId: string, windowStart: number) {
   const matches: HistoryMatch[] = [];
   const seen = new Set<string>();
+  let readFrom: number | null = null;
+  let toMs: number | undefined;
 
   for (let page = 0; page < MAX_PAGES; page += 1) {
-    const request = getPlayerGameStats(playerId, page * PAGE_SIZE, PAGE_SIZE);
+    const request = getPlayerGameStats(playerId, 0, PAGE_SIZE, toMs);
     // A failed older page shouldn't throw away the newer matches already parsed.
     const response = page === 0 ? await request : await request.catch(() => null);
-    if (!response) break;
+    if (!response) {
+      readFrom = toMs ? Math.ceil(toMs / 1000) : null;
+      break;
+    }
     const items = response.items || [];
     for (const item of items) {
       const match = parsePlayerMatch(item);
@@ -207,11 +217,19 @@ async function recentMatches(playerId: string, windowStart: number) {
       matches.push(match);
     }
 
-    const oldest = items.length ? timestamp(items[items.length - 1].stats as Stats) : 0;
+    const oldestStats = items.length ? (items[items.length - 1].stats as Stats) : null;
+    const oldest = oldestStats ? timestamp(oldestStats) : 0;
     if (items.length < PAGE_SIZE || oldest < windowStart) break;
+    if (page === MAX_PAGES - 1) {
+      readFrom = oldest;
+      break;
+    }
+    // `to` is exclusive, so step one millisecond past the oldest match and de-duplicate.
+    const finished = oldestStats?.['Match Finished At'];
+    toMs = (typeof finished === 'number' && finished > 1e12 ? finished : oldest * 1000) + 1;
   }
 
-  return matches.sort((a, b) => b.finishedAt - a.finishedAt);
+  return { matches: matches.sort((a, b) => b.finishedAt - a.finishedAt), readFrom };
 }
 
 async function buildPlayer(
@@ -219,15 +237,21 @@ async function buildPlayer(
   ownerId: string,
   alias: string | undefined,
   now: number
-): Promise<{ player: SquadPlayer; matches: HistoryMatch[] }> {
+): Promise<{ player: SquadPlayer; matches: HistoryMatch[]; readFrom: number | null }> {
   const game = profile.games?.cs2;
   const region = game?.region || '';
   const country = (profile.country || '').toLowerCase();
 
-  const [lifetimeStats, matches] = await Promise.all([
+  const [lifetimeStats, { matches, readFrom }] = await Promise.all([
     getLifetimeStats(profile.player_id).catch(() => null),
-    recentMatches(profile.player_id, now - WINDOW_DAYS * DAY).catch(() => [] as HistoryMatch[])
+    // Nothing read: every count from these matches is unknown rather than zero.
+    recentMatches(profile.player_id, now - WINDOW_DAYS * DAY).catch(() => ({
+      matches: [] as HistoryMatch[],
+      readFrom: now as number | null
+    }))
   ]);
+  /** Matches since `start`, or null when the matches read don't reach back that far. */
+  const since = (start: number) => (readFrom !== null && readFrom > start ? null : countSince(matches, start));
 
   // FACEIT leaves players who stopped playing out of its ladders, so only ask for active ones.
   const ranked = Boolean(region) && (matches[0]?.finishedAt ?? 0) >= now - WINDOW_DAYS * DAY;
@@ -275,14 +299,14 @@ async function buildPlayer(
       last90: mapForm(matches.slice(0, 90))
     },
     played: {
-      days7: countSince(matches, now - 7 * DAY),
-      days30: countSince(matches, now - 30 * DAY),
-      days90: countSince(matches, now - 90 * DAY)
+      days7: since(now - 7 * DAY),
+      days30: since(now - 30 * DAY),
+      days90: since(now - 90 * DAY)
     },
     lastMatchAt: matches[0]?.finishedAt || null
   };
 
-  return { player, matches };
+  return { player, matches, readFrom };
 }
 
 /** The owner and every friend with a CS2 profile. */
@@ -304,8 +328,15 @@ export async function buildSquad(): Promise<SquadOverview> {
     buildPlayer(profile, owner.player_id, aliases[profile.player_id], now)
   );
 
-  const histories = built.map(({ player, matches }) => ({ playerId: player.playerId, matches }));
-  const windowStart = now - WINDOW_DAYS * DAY;
+  const histories = built.map(({ player, matches, readFrom }) => ({ playerId: player.playerId, matches, readFrom }));
+  // If a busy player's pages ran out before 90 days, group numbers cover only as far back as
+  // every read reaches, rather than miss that player's older games. A read that failed outright
+  // (readFrom = now) can't shrink it to nothing; that player's activity shows as unknown instead.
+  const reached = built
+    .map(({ readFrom }) => readFrom)
+    .filter((readFrom): readFrom is number => readFrom !== null && readFrom < now);
+  const windowStart = Math.max(now - WINDOW_DAYS * DAY, ...reached);
+  const windowDays = Math.floor((now - windowStart) / DAY);
   const games = groupGames(histories).filter((game) => game.finishedAt >= windowStart);
 
   const mapImages: Record<string, string> = {};
@@ -318,7 +349,7 @@ export async function buildSquad(): Promise<SquadOverview> {
   return {
     ownerId: owner.player_id,
     generatedAt: now,
-    windowDays: WINDOW_DAYS,
+    windowDays,
     players: built.map(({ player }) => player).sort((a, b) => b.elo - a.elo),
     mapImages,
     games: games.slice(0, GROUP_GAMES),

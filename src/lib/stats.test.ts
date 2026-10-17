@@ -203,8 +203,24 @@ describe('weekly activity', () => {
     expect(rows[0].weeks).toEqual([0, 1, 1]);
     // Today is Saturday 17 Oct, so the 14 days start on Sunday 4 Oct.
     expect(new Date(dayStarts[0] * 1000).toISOString()).toBe('2026-10-04T00:00:00.000Z');
-    expect(rows[0].days.reduce((sum, count) => sum + count, 0)).toBe(2);
+    expect(rows[0].days.reduce((sum: number, count) => sum + (count ?? 0), 0)).toBe(2);
     expect(rows[0].days[dayStarts.indexOf(thisWeek)]).toBe(1);
+  });
+
+  it('marks periods before what was read as unknown, not zero', () => {
+    const now = Date.UTC(2026, 9, 17, 15) / 1000;
+    const thisWeek = weekStart(now);
+    const { rows } = recentActivity(
+      [{ playerId: 'a', matches: [match({ finishedAt: thisWeek + DAY })], readFrom: thisWeek - 3 * DAY }],
+      14,
+      3,
+      now
+    );
+    // Read back to Friday 9 Oct: last week (from Monday 5th) and the one before are unknown, and so
+    // are Sunday 4th to Thursday 8th.
+    expect(rows[0].weeks).toEqual([null, null, 1]);
+    expect(rows[0].days.slice(0, 5)).toEqual([null, null, null, null, null]);
+    expect(rows[0].days.slice(5)).toEqual([0, 0, 0, 0, 1, 0, 0, 0, 0]);
   });
 });
 
@@ -232,5 +248,18 @@ describe('long activity', () => {
     expect(years.map((start) => new Date(start * 1000).getUTCFullYear())).toEqual([2024, 2025, 2026]);
     expect(rows[0]).toEqual({ playerId: 'a', months: [0, 1], years: [1, 0, 1] });
     expect(rows[1]).toEqual({ playerId: 'b', months: [1, 0], years: [0, 0, 1] });
+  });
+
+  it('leaves a player whose history was not read as unknown', () => {
+    const now = Date.UTC(2026, 9, 17) / 1000;
+    const { rows } = longActivity(
+      [
+        { playerId: 'a', matches: [{ finishedAt: Date.UTC(2025, 1, 1) / 1000 }] },
+        { playerId: 'b', matches: [], readFrom: now }
+      ],
+      2,
+      now
+    );
+    expect(rows[1]).toEqual({ playerId: 'b', months: [null, null], years: [null, null] });
   });
 });

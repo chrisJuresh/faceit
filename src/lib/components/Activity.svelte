@@ -6,7 +6,8 @@
   /**
    * Matches per player per day, week, month or year; deeper accent for busier cells. Days and weeks
    * come with the page. Months and years need each player's full history, so they're fetched the
-   * first time either is picked.
+   * first time either is picked. A null count is a period FACEIT's pages didn't reach (or a read
+   * that failed): it shows as unread, never as 0, and the total then reads "at least".
    */
   let { activity, players }: { activity: SquadOverview['activity']; players: SquadPlayer[] } = $props();
 
@@ -84,12 +85,19 @@
       ? [...players]
           .sort((a, b) => b.elo - a.elo)
           .map((player) => {
-            const cells = table.counts.get(player.playerId) ?? table.columns.map(() => 0);
-            return { player, cells, total: cells.reduce((sum, count) => sum + count, 0) };
+            const cells = table.counts.get(player.playerId) ?? table.columns.map(() => null);
+            const known = cells.filter((count): count is number => count !== null);
+            return {
+              player,
+              cells,
+              total: known.reduce((sum, count) => sum + count, 0),
+              partial: known.length < cells.length,
+              unread: !known.length
+            };
           })
       : []
   );
-  const peak = $derived(Math.max(1, ...rows.flatMap((row) => row.cells)));
+  const peak = $derived(Math.max(1, ...rows.flatMap((row) => row.cells.filter((count) => count !== null))));
 
   /**
    * Five accent steps. The light three carry --ink and the deep two --on-accent, so the count
@@ -103,7 +111,8 @@
     { mix: 94, text: 'var(--on-accent)' }
   ];
   const step = (count: number) => STEPS[Math.max(0, Math.ceil(Math.sqrt(count / peak) * STEPS.length) - 1)];
-  const plural = (count: number) => `${count} ${count === 1 ? 'match' : 'matches'}`;
+  const plural = (count: number | null) =>
+    count === null ? 'Not read from FACEIT' : `${count} ${count === 1 ? 'match' : 'matches'}`;
 </script>
 
 <div class="section-head">
@@ -154,7 +163,9 @@
             </th>
             {#each row.cells as count, index (index)}
               {@const tone = count ? step(count) : null}
+              {@const unread = count === null}
               <td
+                class:unread
                 style:background={tone ? `color-mix(in srgb, var(--accent) ${tone.mix}%, var(--cell))` : undefined}
                 style:color={tone?.text}
                 {...readout(() => [
@@ -162,10 +173,12 @@
                   plural(count)
                 ])}
               >
-                <span aria-hidden="true">{count || ''}</span><span class="sr-only">{plural(count)}</span>
+                <span aria-hidden="true">{unread ? '?' : count || ''}</span><span class="sr-only">{plural(count)}</span>
               </td>
             {/each}
-            <td class="total" class:zero={!row.total}>{row.total}</td>
+            <td class="total" class:zero={!row.total} title={row.partial ? 'At least: some periods not read' : undefined}>
+              {#if row.unread}—{:else}{row.total}{#if row.partial}+{/if}{/if}
+            </td>
           </tr>
         {/each}
       </tbody>
@@ -234,6 +247,13 @@
     height: 26px;
     min-width: 26px;
     text-align: center;
+  }
+
+  /* Not read from FACEIT: outlined with a "?" so it can't pass for an empty (zero) cell. */
+  td.unread {
+    background: none;
+    box-shadow: inset 0 0 0 1px var(--rule);
+    color: var(--muted);
   }
 
   .total {

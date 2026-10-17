@@ -288,15 +288,19 @@ export function getLifetimeStats(playerId: string) {
   );
 }
 
-/** A player's per-match stats, newest first, one page of up to 100. */
-export function getPlayerGameStats(playerId: string, offset: number, limit: number) {
+/**
+ * A player's per-match stats, newest first, one page of up to 100. FACEIT caps the offset at 200,
+ * so older pages pass `toMs` (exclusive, in milliseconds) instead.
+ */
+export function getPlayerGameStats(playerId: string, offset: number, limit: number, toMs?: number) {
   const boundedLimit = Math.max(1, Math.min(100, Math.round(limit)));
+  const to = toMs ? `&to=${toMs}` : '';
   return cached(
-    `game-stats:${playerId}:${offset}:${boundedLimit}`,
+    `game-stats:${playerId}:${offset}:${boundedLimit}:${toMs ?? ''}`,
     2 * MINUTE,
     () =>
       request<{ items: FaceitGameStatsItem[] }>(
-        `/players/${encodeURIComponent(playerId)}/games/cs2/stats?offset=${offset}&limit=${boundedLimit}`
+        `/players/${encodeURIComponent(playerId)}/games/cs2/stats?offset=${offset}&limit=${boundedLimit}${to}`
       ),
     28 * MINUTE
   );

@@ -198,24 +198,32 @@ export function weekStart(timestamp: number) {
   return day - weekday * DAY;
 }
 
-/** Match finish times for one player, in any order. */
+/**
+ * Match finish times for one player, in any order. `readFrom` is how far back they are complete;
+ * null or absent when nothing older was missed.
+ */
 export interface PlayerTimes {
   playerId: string;
   matches: Array<{ finishedAt: number }>;
+  readFrom?: number | null;
 }
 
 /**
  * Each player's matches counted into the periods that begin at `starts` (ascending, UTC). The last
- * period runs on to now; matches before the first are left out.
+ * period runs on to now; matches before the first are left out. A period that starts before the
+ * player's `readFrom` is null, unknown, rather than a count that would come up short.
  */
-export function countByPeriod(players: PlayerTimes[], starts: number[]) {
+export function countByPeriod(players: PlayerTimes[], starts: number[]): Array<Array<number | null>> {
   return players.map((player) => {
-    const counts = starts.map(() => 0);
+    const counts: Array<number | null> = starts.map((start) =>
+      player.readFrom != null && start < player.readFrom ? null : 0
+    );
     for (const match of player.matches) {
       if (match.finishedAt < starts[0]) continue;
       let index = starts.length - 1;
       while (match.finishedAt < starts[index]) index -= 1;
-      counts[index] += 1;
+      const count = counts[index];
+      if (count !== null) counts[index] = count + 1;
     }
     return counts;
   });
