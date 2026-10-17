@@ -153,7 +153,8 @@ export interface SquadPlayer {
   /** Per-map records over the latest 30 and 90 matches, most played first. */
   mapForm: { last30: MapForm[]; last90: MapForm[] };
   /** Matches played in the last 7, 30 and 90 days. */
-  played: { days7: number; days30: number; days90: number };
+  /** Null when the matches read don't reach back that far. */
+  played: { days7: number | null; days30: number | null; days90: number | null };
   lastMatchAt: number | null;
 }
 
@@ -206,22 +207,30 @@ export interface SquadOverview {
   games: GroupGame[];
   /** Every group game in the players' fetched histories, not just the window, newest first. */
   lineups: GroupLineup[];
+  /**
+   * Null when every history was read to its start, so lineups are every group game. Otherwise a
+   * history was cut short and lineups only reach back to this time.
+   */
+  togetherFrom: number | null;
   together: { matches: number; wins: number };
   pairs: PairRecord[];
-  /** Matches per player per day and per week (UTC), oldest first. */
+  /** Matches per player per day and per week (UTC), oldest first; null where not read. */
   activity: {
     dayStarts: number[];
     weekStarts: number[];
-    rows: Array<{ playerId: string; days: number[]; weeks: number[] }>;
+    rows: Array<{ playerId: string; days: Array<number | null>; weeks: Array<number | null> }>;
   };
 }
 
-/** Matches per player per month and per year (UTC), oldest first, from each full CS2 history. */
+/**
+ * Matches per player per month and per year (UTC), oldest first, from each full CS2 history; null
+ * where that history wasn't read.
+ */
 export interface LongActivity {
   generatedAt: number;
   monthStarts: number[];
   yearStarts: number[];
-  rows: Array<{ playerId: string; months: number[]; years: number[] }>;
+  rows: Array<{ playerId: string; months: Array<number | null>; years: Array<number | null> }>;
 }
 
 export type LivePhase = 'live' | 'setup' | 'finished' | 'cancelled';

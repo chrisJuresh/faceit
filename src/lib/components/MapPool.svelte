@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { fixed, thousands } from '$lib/format';
+  import { fixed, monthYear, thousands } from '$lib/format';
   import { togetherMaps } from '$lib/stats';
   import { readout } from '$lib/tooltip.svelte';
   import type { GroupLineup, MapStats, SquadPlayer, TogetherMap } from '$lib/types';
@@ -11,15 +11,19 @@
   /**
    * Each player's record per map over their last 30 or 90 matches or FACEIT's lifetime record,
    * with the group's record on top: games where two or more of the ticked players were on the
-   * same team, over the same span (their last 30 or 90 games together, or all of them).
+   * same team, over the same span (their last 30 or 90 games together, or all of them). When a
+   * history was cut short, `togetherFrom` says how far back the games go, and the row says so
+   * rather than pass for a lifetime record.
    */
   let {
     players,
     lineups,
+    togetherFrom,
     mapImages
   }: {
     players: SquadPlayer[];
     lineups: GroupLineup[];
+    togetherFrom: number | null;
     mapImages: Record<string, string>;
   } = $props();
 
@@ -156,7 +160,8 @@
             <th class="stick" scope="row">
               <span class="label">Together</span>
               <span class="note">
-                <span class="mono">{thousands(togetherGames)}</span> games{#if leftOutCount}{' · '}<span class="mono">{leftOutCount}</span>
+                <span class="mono">{thousands(togetherGames)}</span> games{#if togetherFrom && (!scopeCount || togetherGames < scopeCount)}
+{' '}since {monthYear(togetherFrom)}{/if}{#if leftOutCount}{' · '}<span class="mono">{leftOutCount}</span>
                   left out{/if}
               </span>
             </th>

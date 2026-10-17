@@ -286,4 +286,5 @@ export function isLowSample(player: SquadPlayer, view: View, scope: Scope) {
   return (player.form[scope]?.matches ?? 0) < 10;
 }
 
-export const isActive = (player: SquadPlayer) => player.played.days90 > 0;
+/** Unknown counts that hit the page cap; unknown counts from a failed read keep the player listed. */
+export const isActive = (player: SquadPlayer) => player.played.days90 !== 0;
