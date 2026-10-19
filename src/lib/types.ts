@@ -339,8 +339,6 @@ export interface LiveMatch {
   finishedAt: number | null;
   rounds: number | null;
   faceitUrl: string;
-  /** FACEIT's demo download for a finished match, when it publishes one. */
-  demoUrl: string;
   trackedPlayerIds: string[];
   teams: LiveTeam[];
 }

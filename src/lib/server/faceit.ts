@@ -132,6 +132,7 @@ export interface FaceitMatch {
   started_at?: number;
   finished_at?: number;
   faceit_url?: string;
+  /** Private resource URLs, not downloads: only FACEIT's separately approved Downloads API signs them. */
   demo_url?: string[];
   teams: Record<string, FaceitMatchFaction>;
   voting?: Record<string, { entities?: FaceitVotingEntity[]; pick?: string[] } | string[] | undefined>;
