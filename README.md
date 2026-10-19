@@ -42,7 +42,7 @@ Notes on FACEIT's fields:
 The page polls `/api/live` every 20 seconds while someone is in a match and every 60 seconds otherwise, and pauses while the tab is hidden. For each match it shows everything the public Data API offers:
 
 - **Before and during the match:** status, competition, region, server location, map, elapsed time, both rosters with profile photo, level and ELO, FACEIT's win probability, and each player's lifetime CS2 record (matches, win rate, K/D, ADR, HS%, entry success, 1v1 rate, streaks, recent results) plus their record on the current map.
-- **After the match:** final and half/overtime scores, round count, the demo link when FACEIT publishes one, and a full stat sheet per player (K/D/A, K/D, K/R, ADR, HS%, MVPs, first kills, entries, clutches, multi-kills, utility damage, enemies flashed, sniper kills), plus every raw stat FACEIT returned.
+- **After the match:** final and half/overtime scores, round count, and a full stat sheet per player (K/D/A, K/D, K/R, ADR, HS%, MVPs, first kills, entries, clutches, multi-kills, utility damage, enemies flashed, sniper kills), plus every raw stat FACEIT returned.
 
 `/live` redirects to the main page.
 
@@ -50,6 +50,8 @@ The page polls `/api/live` every 20 seconds while someone is in a match and ever
 
 1. Polling each tracked player's latest match history. This catches every match once FACEIT lists it, and anything that finished in the last 60 minutes.
 2. Optional FACEIT webhooks (recommended for true live detection). Create a webhook subscription in FACEIT App Studio for the owner and friends, covering the `match_status_*` events. Point it at `https://<your-host>/api/webhooks/faceit`, add a custom security header, and set `FACEIT_WEBHOOK_SECRET` (and `FACEIT_WEBHOOK_HEADER` if you don't use the default `x-webhook-secret`) to match. The endpoint returns 404 while the secret is unset. Without Redis, webhook state is in memory and resets on restart. The endpoint must be reachable over public HTTPS.
+
+**No demo link.** The `demo_url` the Data API returns is a private resource URL, not a download. Its host has no public DNS record, and only FACEIT's separately approved Downloads API turns it into a signed link. The board doesn't link it. Use the Match room link to find the demo on FACEIT.
 
 ## Local setup
 

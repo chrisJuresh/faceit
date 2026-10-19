@@ -76,7 +76,6 @@
           </span>
           {#if index === 0 && failed}<span class="meta">Couldn't reach FACEIT; showing the last update</span>{/if}
           <div class="controls">
-            {#if match.demoUrl}<a class="ext" href={match.demoUrl} target="_blank" rel="noreferrer">Demo ↗</a>{/if}
             <a class="ext" href={match.faceitUrl} target="_blank" rel="noreferrer">Match room ↗</a>
           </div>
         </div>

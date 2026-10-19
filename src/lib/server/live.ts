@@ -263,7 +263,6 @@ export function buildLiveMatch(match: FaceitMatch, context: MatchContext): LiveM
     finishedAt: match.finished_at || null,
     rounds,
     faceitUrl: normalizeFaceitUrl(match.faceit_url, `https://www.faceit.com/en/cs2/room/${match.match_id}`),
-    demoUrl: safeImage(match.demo_url?.[0]),
     trackedPlayerIds,
     teams
   };
