@@ -126,6 +126,59 @@ export interface MapForm {
   adr: number;
 }
 
+/** One player's duel and utility counts on one map, from FACEIT's match-room stats. */
+export interface DuelLine {
+  rounds: number;
+  kills: number;
+  entryCount: number;
+  entryWins: number;
+  clutch1v1Count: number;
+  clutch1v1Wins: number;
+  clutch1v2Count: number;
+  clutch1v2Wins: number;
+  utilityCount: number;
+  utilitySuccesses: number;
+  utilityDamage: number;
+  flashCount: number;
+  flashSuccesses: number;
+  enemiesFlashed: number;
+  sniperKills: number;
+}
+
+/**
+ * Duel and utility rates over a run of a player's matches, totalled from their DuelLines. The
+ * names match LifetimeStats, so a column reads either. Rates are percentages (0–100).
+ */
+export interface DuelSummary {
+  matches: number;
+  entryRate: number | null;
+  entrySuccess: number | null;
+  clutch1v1: number | null;
+  clutch1v1Count: number;
+  clutch1v2: number | null;
+  clutch1v2Count: number;
+  utilityDamagePerRound: number | null;
+  utilitySuccess: number | null;
+  flashSuccess: number | null;
+  flashesPerRound: number | null;
+  enemiesFlashedPerRound: number | null;
+  sniperKillShare: number | null;
+}
+
+export type RecentScope = 'last10' | 'last30' | 'last100';
+
+/** Each player's duel summaries over their latest matches. */
+export interface RecentDuels {
+  generatedAt: number;
+  /** False when time ran out before every match was tried; ask again for the rest. */
+  complete: boolean;
+  /** Distinct matches behind the group's latest 100 each, and how many of them have been read. */
+  total: number;
+  read: number;
+  /** A summary is null when any of its matches couldn't be read. */
+  players: Record<string, Record<RecentScope, DuelSummary | null>>;
+}
+
 export interface SquadPlayer {
   playerId: string;
   nickname: string;
@@ -156,6 +209,8 @@ export interface SquadPlayer {
   /** Null when the matches read don't reach back that far. */
   played: { days7: number | null; days30: number | null; days90: number | null };
   lastMatchAt: number | null;
+  /** Duel summaries over the latest 10, 30 and 100 matches. Read separately (/api/duels), so absent from the page load. */
+  duels?: Record<RecentScope, DuelSummary | null>;
 }
 
 export interface GroupGame {

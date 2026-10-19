@@ -75,6 +75,8 @@ export interface FaceitStatsTeam {
 
 export interface FaceitStatsRound {
   match_id: string;
+  /** Map number inside a best-of series, like "Match Round" in a player's match stats. */
+  match_round?: string | number;
   round_stats: Record<string, string | number | null>;
   teams: FaceitStatsTeam[];
 }
@@ -321,11 +323,14 @@ export function getRanking(region: string, playerId: string, country?: string) {
   );
 }
 
+/** A match's stats, read straight from FACEIT, for callers that keep their own copy. */
+export function fetchMatchStats(matchId: string) {
+  return request<FaceitMatchStats>(`/matches/${encodeURIComponent(matchId)}/stats`);
+}
+
 export function getMatchStats(matchId: string) {
   // Only requested for finished matches, whose stats no longer change.
-  return cached(`match-stats:${matchId}`, 6 * 60 * MINUTE, () =>
-    request<FaceitMatchStats>(`/matches/${encodeURIComponent(matchId)}/stats`)
-  );
+  return cached(`match-stats:${matchId}`, 6 * 60 * MINUTE, () => fetchMatchStats(matchId));
 }
 
 export async function mapWithConcurrency<T, R>(
